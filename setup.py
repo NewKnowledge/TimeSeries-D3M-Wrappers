@@ -6,7 +6,8 @@ setup(name='TimeSeries-D3M-Wrappers',
     packages=['SlothD3MWrapper', 
              'ShallotD3MWrapper',
              'ParrotD3MWrapper'],
-    install_requires=["Sloth==2.0.3"],
+    install_requires=["typing",
+                      "Sloth==2.0.3"],
     dependency_links=[
         "git+https://github.com/NewKnowledge/sloth@82a1e08049531270256f38ca838e6cc7d1119223#egg=Sloth-2.0.3"
     ],
