@@ -77,7 +77,7 @@ class TimeSeriesLoaderPrimitive(transformer.TransformerPrimitiveBase[container.D
             },
             'installation': [{
                 'type': metadata_base.PrimitiveInstallationType.PIP,
-                'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
+                'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
                 git_commit=utils.current_git_commit(os.path.dirname(__file__)),
                 ),
             }],
