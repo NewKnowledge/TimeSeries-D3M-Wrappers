@@ -5,7 +5,7 @@ The base Sloth library can be found here: https://github.com/NewKnowledge/sloth
 
 ## Install
 
-pip3 install -e git+https://github.com/NewKnowledge/sloth-d3m-wrapper.git#egg=SlothD3MWrapper --process-dependency-links
+pip3 install -e git+https://github.com/NewKnowledge/TimeSeriesD3MWrappers.git#egg=TimeSeriesD3MWrapper --process-dependency-links
 
 ## Output
 The output is a DataFrame containing a single column where each entry is the associated series' cluster number.
@@ -22,7 +22,7 @@ The base Sloth library (which contains the Shapelet class and other time series 
 
 ## Install
 
-pip3 install -e git+https://github.com/NewKnowledge/shallot-d3m-wrapper.git#egg=ShallotD3MWrapper --process-dependency-links
+pip3 install -e git+https://github.com/NewKnowledge/TimeSeriesD3MWrappers.git#egg=TimeSeriesD3MWrapper --process-dependency-links
 
 ## Output
 The output is a numpy ndarray containing a predicted class for each of the input time series.
@@ -49,7 +49,7 @@ The base Sloth library (which also contains other methods that can be called on 
 
 ## Install
 
-pip3 install -e git+https://github.com/NewKnowledge/parrot-d3m-wrapper.git#egg=ParrotD3MWrapper --process-dependency-links
+pip3 install -e git+https://github.com/NewKnowledge/TimeSeriesD3MWrappers.git#egg=TimeSeriesD3MWrapper --process-dependency-links
 
 ## Output
  The output is a list of length 'n_periods' that contains a prediction for each of 'n_periods' future time periods.
