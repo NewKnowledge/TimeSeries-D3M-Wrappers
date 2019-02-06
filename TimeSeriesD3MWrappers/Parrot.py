@@ -56,7 +56,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             'contact': __contact__,
             'uris': [
                 # Unstructured URIs.
-                "https://github.com/NewKnowledge/parrot-d3m-wrapper",
+                "https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers",
             ],
         },
         # A list of dependencies in order. These can be Python packages, system packages, or Docker images.
@@ -71,7 +71,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
              },
              {
             'type': metadata_base.PrimitiveInstallationType.PIP,
-            'package_uri': 'git+https://github.com/NewKnowledge/parrot-d3m-wrapper.git@{git_commit}#egg=ParrotD3MWrapper'.format(
+            'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
                 git_commit=utils.current_git_commit(os.path.dirname(__file__)),
              ),
         }],
