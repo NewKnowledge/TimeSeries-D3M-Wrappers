@@ -72,14 +72,14 @@ class TimeSeriesLoaderPrimitive(transformer.TransformerPrimitiveBase[container.D
                 'contact': 'mailto:chris.bethune@uncharted.software',
                 'uris': [
                 # Unstructured URIs.
-                     "https://github.com/NewKnowledge/sloth-d3m-wrapper",
+                     "https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers",
                 ],
             },
             'installation': [{
                 'type': metadata_base.PrimitiveInstallationType.PIP,
-                'package_uri': 'git+https://gitlab.com/unchartedsoftware/distil-timeseries-loader.git@' +
-                               '{git_commit}#egg=distil-timeseries-loader'
-                               .format(git_commit=d3m_utils.current_git_commit(os.path.dirname(__file__)),),
+                'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
+                git_commit=utils.current_git_commit(os.path.dirname(__file__)),
+                ),
             }],
             'algorithm_types': [
                 metadata_base.PrimitiveAlgorithmType.FILE_MANIPULATION,
