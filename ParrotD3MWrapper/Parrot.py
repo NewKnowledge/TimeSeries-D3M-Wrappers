@@ -16,7 +16,7 @@ from common_primitives import utils as utils_cp, dataset_to_dataframe as Dataset
 
 __author__ = 'Distil'
 __version__ = '1.0.3'
-__contact__ = 'mailto:jeffrey.gleason@newknowledge.io'
+__contact__ = 'mailto:nklabs@newknowledge.com'
 
 Inputs = container.pandas.DataFrame
 Outputs = container.pandas.DataFrame
@@ -68,10 +68,6 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 'type': metadata_base.PrimitiveInstallationType.PIP,
                 'package': 'cython',
                 'version': '0.28.5',
-             },
-             {
-                "type": "PIP",
-                "package_uri": "git+https://github.com/NewKnowledge/sloth.git@82a1e08049531270256f38ca838e6cc7d1119223#egg=Sloth-2.0.3"
              },
              {
             'type': metadata_base.PrimitiveInstallationType.PIP,
