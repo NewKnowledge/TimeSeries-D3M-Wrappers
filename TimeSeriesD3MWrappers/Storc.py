@@ -14,8 +14,6 @@ from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
-#from timeseries_loader import TimeSeriesLoaderPrimitive
-
 __author__ = 'Distil'
 __version__ = '2.0.2'
 __contact__ = 'mailto:nklabs@newknowledge.com'
@@ -107,8 +105,8 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         col_name = inputs.metadata.query_column(0)['name']
         d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
 
-        #ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index": None})
-        #inputs = ts_loader.produce(inputs = inputs).value
+        ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index": None})
+        inputs = ts_loader.produce(inputs = inputs).value
 
         # set number of clusters for k-means
         if self.hyperparams['algorithm'] == 'TimeSeriesKMeans':
