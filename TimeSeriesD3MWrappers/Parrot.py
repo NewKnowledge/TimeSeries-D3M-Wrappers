@@ -26,8 +26,8 @@ class Params(params.Params):
 
 # default values chosen for 56_sunspots 'sunspot.year' seed dataset
 class Hyperparams(hyperparams.Hyperparams):
-    index = hyperparams.UniformInt(lower = 0, upper = sys.maxsize, default = 2, semantic_types=[
-       'https://metadata.datadrivendiscovery.org/types/ControlParameter'], description='index of column to predict')
+    index = hyperparams.UniformInt(lower = 0, upper = sys.maxsize, default = 0, semantic_types=[
+       'https://metadata.datadrivendiscovery.org/types/ControlParameter'], description='index of which suggestedTarget to predict')
     n_periods = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 29, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/ControlParameter'], description='number of periods to predict')
     seasonal = hyperparams.UniformBool(default = True, semantic_types = [
@@ -153,8 +153,9 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # second column ('predictions')
         col_dict = dict(parrot_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
         col_dict['structural_type'] = type("1")
-        col_dict['name'] = list(inputs)[self.hyperparams['index']]
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute',)
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget'))
+        col_dict['name'] = inputs.metadata.query_column(targets[self.hyperparams['index']])['name']
+        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
         parrot_df.metadata = parrot_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
 
         return CallResult(parrot_df)
@@ -167,7 +168,7 @@ if __name__ == '__main__':
     ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
     df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
     hyperparams_class = Parrot.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    client = Parrot(hyperparams=hyperparams_class.defaults().replace({'index':2, 'n_periods':29, 'seasonal':True, 'seasonal_differencing':11}))
+    client = Parrot(hyperparams=hyperparams_class.defaults().replace({'index':0, 'n_periods':29, 'seasonal':True, 'seasonal_differencing':11}))
     client.set_training_data(inputs = df, outputs = None)
     client.fit()
     test_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/56_sunspots/TEST/dataset_TEST/datasetDoc.json')
