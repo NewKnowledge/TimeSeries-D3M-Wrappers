@@ -164,8 +164,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # second column ('predictions')
         col_dict = dict(shallot_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
         col_dict['structural_type'] = type("1")
-        target = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        col_dict['name'] = inputs.metadata.query_column(target)['name']
+        col_dict['name'] = 'label'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
         shallot_df.metadata = shallot_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
         return CallResult(shallot_df)
