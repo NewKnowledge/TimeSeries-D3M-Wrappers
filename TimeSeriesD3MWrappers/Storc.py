@@ -108,19 +108,19 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
 
         ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index": None})
-        time_inputs = ts_loader.produce(inputs = inputs).value
+        inputs = ts_loader.produce(inputs = inputs).value
 
         # set number of clusters for k-means
         if self.hyperparams['algorithm'] == 'TimeSeriesKMeans':
-            labels = sloth.ClusterSeriesKMeans(time_inputs.values, self.hyperparams['nclusters'], 'TimeSeriesKMeans')
+            labels = sloth.ClusterSeriesKMeans(inputs.values, self.hyperparams['nclusters'], 'TimeSeriesKMeans')
         elif self.hyperparams['algorithm'] == 'DBSCAN':
-            SimilarityMatrix = sloth.GenerateSimilarityMatrix(time_inputs.values)
+            SimilarityMatrix = sloth.GenerateSimilarityMatrix(inputs.values)
             nclusters, labels, cnt = sloth.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
         elif self.hyperparams['algorithm'] == 'HDBSCAN':
-            SimilarityMatrix = sloth.GenerateSimilarityMatrix(time_inputs.values)
+            SimilarityMatrix = sloth.GenerateSimilarityMatrix(inputs.values)
             nclusters, labels, cnt = sloth.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_samples'])
         else:
-            labels = sloth.ClusterSeriesKMeans(time_inputs.values, self.hyperparams['nclusters'], 'GlobalAlignmentKernelKMeans')       
+            labels = sloth.ClusterSeriesKMeans(inputs.values, self.hyperparams['nclusters'], 'GlobalAlignmentKernelKMeans')       
 
         # add metadata to output
         labels = pandas.DataFrame(labels)
