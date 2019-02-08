@@ -147,8 +147,8 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
 
         ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index":None})
-        time_inputs = ts_loader.produce(inputs = inputs).value.values
-        time_inputs = np.reshape(time_inputs, time_inputs.shape + (1,))
+        inputs = ts_loader.produce(inputs = inputs).value.values
+        inputs = np.reshape(inputs, inputs.shape + (1,))
         # add metadata to output
         # produce classifications using Shapelets
         classes = pandas.DataFrame(self._shapelets.PredictClasses(time_inputs))
