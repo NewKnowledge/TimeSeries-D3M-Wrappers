@@ -3,7 +3,7 @@ import os.path
 import numpy as np
 import pandas
 
-from Sloth import Sloth
+from Sloth import cluster
 from tslearn.datasets import CachedDatasets
 
 from d3m.primitive_interfaces.transformer import TransformerPrimitiveBase
@@ -100,9 +100,6 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         Outputs
             The output is a dataframe containing a single column where each entry is the associated series' cluster number.
         """
-        # setup model up
-        sloth = Sloth()
-        
         # split filenames into d3mIndex (hacky)
         col_name = inputs.metadata.query_column(0)['name']
         d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
@@ -112,15 +109,15 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
 
         # set number of clusters for k-means
         if self.hyperparams['algorithm'] == 'TimeSeriesKMeans':
-            labels = sloth.ClusterSeriesKMeans(inputs.values, self.hyperparams['nclusters'], 'TimeSeriesKMeans')
+            labels = cluster.ClusterSeriesKMeans(inputs.values, self.hyperparams['nclusters'], 'TimeSeriesKMeans')
         elif self.hyperparams['algorithm'] == 'DBSCAN':
-            SimilarityMatrix = sloth.GenerateSimilarityMatrix(inputs.values)
-            nclusters, labels, cnt = sloth.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
+            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs.values)
+            nclusters, labels, cnt = cluster.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
         elif self.hyperparams['algorithm'] == 'HDBSCAN':
-            SimilarityMatrix = sloth.GenerateSimilarityMatrix(inputs.values)
-            nclusters, labels, cnt = sloth.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_samples'])
+            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs.values)
+            nclusters, labels, cnt = cluster.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_samples'])
         else:
-            labels = sloth.ClusterSeriesKMeans(inputs.values, self.hyperparams['nclusters'], 'GlobalAlignmentKernelKMeans')       
+            labels = cluster.ClusterSeriesKMeans(inputs.values, self.hyperparams['nclusters'], 'GlobalAlignmentKernelKMeans')       
 
         # add metadata to output
         labels = pandas.DataFrame(labels)

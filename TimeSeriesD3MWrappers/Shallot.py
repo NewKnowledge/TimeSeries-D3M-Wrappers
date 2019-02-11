@@ -6,7 +6,7 @@ import typing
 from json import JSONDecoder
 from typing import List
 
-from Sloth import Shapelets
+from Sloth.classify import Shapelets
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
