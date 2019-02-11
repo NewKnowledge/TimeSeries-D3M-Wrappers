@@ -39,7 +39,7 @@ class Hyperparams(hyperparams.Hyperparams):
     epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 200, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of training epochs')
-    learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.01, semantic_types=[
+    learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.1, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of different shapelet lengths')
     weight_regularizer = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.01, semantic_types=[
