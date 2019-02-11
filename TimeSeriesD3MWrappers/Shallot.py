@@ -158,7 +158,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = np.reshape(inputs, inputs.shape + (1,))
         # add metadata to output
         # produce classifications using Shapelets
-        classes = pandas.DataFrame(self._shapelets.PredictClasses(time_inputs))
+        classes = pandas.DataFrame(self._shapelets.PredictClasses(inputs))
         output_df = pandas.concat([d3mIndex_df, classes], axis = 1)
         shallot_df = d3m_DataFrame(output_df)
 
