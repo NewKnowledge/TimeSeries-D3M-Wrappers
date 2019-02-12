@@ -5,7 +5,7 @@ import pandas
 import typing
 from typing import List
 
-from Sloth import Sloth
+from Sloth import predict
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
@@ -89,7 +89,6 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
         self._params = {}
         self._X_train = None        # training inputs
-        self._sloth = Sloth()       # Sloth model
         self._arima = None          # ARIMA classifier
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
@@ -98,7 +97,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
 
         # fits ARIMA model using training data from set_training_data and hyperparameters
-        self._arima = self._sloth.FitSeriesARIMA(self._X_train, 
+        self._arima = predict.FitSeriesARIMA(self._X_train, 
                                                 self.hyperparams['seasonal'],
                                                 self.hyperparams['seasonal_differencing'])
         return CallResult(None)
@@ -120,7 +119,8 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
 
         # use column according to hyperparameter index
-        self._X_train = (inputs.iloc[:,self.hyperparams['index']].values).astype(np.float)
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        self._X_train = (inputs.iloc[:,targets[self.hyperparams['index']]].values).astype(np.float)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -140,7 +140,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # just take d3m index from input test set
         output_df = inputs['d3mIndex']
         # produce future foecast using arima
-        future_forecast = pandas.DataFrame(self._sloth.PredictSeriesARIMA(self._arima, self.hyperparams['n_periods']))
+        future_forecast = pandas.DataFrame(predict.PredictSeriesARIMA(self._arima, self.hyperparams['n_periods']))
         output_df = pandas.concat([output_df, future_forecast], axis=1)
         parrot_df = d3m_DataFrame(output_df)
         
@@ -163,7 +163,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 if __name__ == '__main__':
 
     # load data and preprocessing
-    input_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/56_sunspots/TRAIN/dataset_TRAIN/datasetDoc.json')
+    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/56_sunspots/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
     df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
@@ -171,7 +171,7 @@ if __name__ == '__main__':
     client = Parrot(hyperparams=hyperparams_class.defaults().replace({'index':0, 'n_periods':29, 'seasonal':True, 'seasonal_differencing':11}))
     client.set_training_data(inputs = df, outputs = None)
     client.fit()
-    test_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/56_sunspots/TEST/dataset_TEST/datasetDoc.json')
+    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/56_sunspots/TEST/dataset_TEST/datasetDoc.json')
     test_df = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value)
     results = client.produce(inputs = test_df)
     print(results.value)

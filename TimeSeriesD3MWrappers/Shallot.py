@@ -6,7 +6,7 @@ import typing
 from json import JSONDecoder
 from typing import List
 
-from Sloth import Shapelets
+from Sloth.classify import Shapelets
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
@@ -28,9 +28,9 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):
-    shapelet_length = hyperparams.LogUniform(lower = 0, upper = 1, default = 0.1, 
+    shapelet_length = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.1, 
         upper_inclusive = False, semantic_types = [
-       'https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+       'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'base shapelet length, expressed as fraction of length of time series')
     num_shapelet_lengths = hyperparams.UniformInt(lower = 1, upper = 100, default = 2, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
@@ -39,6 +39,12 @@ class Hyperparams(hyperparams.Hyperparams):
     epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 200, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of training epochs')
+    learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.1, semantic_types=[
+       'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
+       description = 'number of different shapelet lengths')
+    weight_regularizer = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.01, semantic_types=[
+       'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
+       description = 'number of different shapelet lengths')
     pass
 
 
@@ -103,7 +109,8 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         fits Shapelet classifier using training data from set_training_data and hyperparameters
         '''
         self._shapelets = Shapelets(self._X_train, self._y_train, self.hyperparams['epochs'], 
-            self.hyperparams['shapelet_length'], self.hyperparams['num_shapelet_lengths'])
+            self.hyperparams['shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
+            self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'])
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -151,7 +158,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = np.reshape(inputs, inputs.shape + (1,))
         # add metadata to output
         # produce classifications using Shapelets
-        classes = pandas.DataFrame(self._shapelets.PredictClasses(time_inputs))
+        classes = pandas.DataFrame(self._shapelets.PredictClasses(inputs))
         output_df = pandas.concat([d3mIndex_df, classes], axis = 1)
         shallot_df = d3m_DataFrame(output_df)
 
