@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='TimeSeriesD3MWrappers',
-    version='1.0.0',
+    version='1.0.1',
     description='Three wrappesr for interacting with New Knowledge time series tool Sloth',
     packages=['TimeSeriesD3MWrappers'],
     install_requires=["typing",
