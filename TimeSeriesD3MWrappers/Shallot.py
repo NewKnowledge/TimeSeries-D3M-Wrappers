@@ -95,13 +95,12 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         'primitive_family': metadata_base.PrimitiveFamily.TIME_SERIES_CLASSIFICATION,
     })
 
-    def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0, volumes: typing.Dict[str,str]=None)-> None:
+    def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0)-> None:
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
         
-        self.volumes = volumes
         self._params = {}
         self._X_train = None          # training inputs
-        self._y_train = None          # training outputs
+        self._y_train = None          # training labels
         self._shapelets = Shapelets(self.hyperparams['epochs'], 
             self.hyperparams['shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
             self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'])  
