@@ -85,7 +85,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         self._params = {}
         self._X_train = None          # training inputs
-        self._kmeans = Kmeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
+        self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -106,9 +106,8 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         Parameters
         ----------
-        inputs: numpy ndarray of size (number_of_time_series, time_series_length, dimension) containing training time series
-
-        outputs: numpy ndarray of size (number_time_series,) containing classes of training time series
+        inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
+        
         '''
         # load and reshape training data
         ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index":None})
