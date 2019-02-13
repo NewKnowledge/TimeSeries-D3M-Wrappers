@@ -22,6 +22,9 @@ __contact__ = 'mailto:nklabs@newknowledge.com'
 Inputs = container.pandas.DataFrame
 Outputs = container.pandas.DataFrame
 
+class Params(params.Params):
+    pass
+
 class Hyperparams(hyperparams.Hyperparams):
     algorithm = hyperparams.Enumeration(default = 'GlobalAlignmentKernelKMeans', 
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
