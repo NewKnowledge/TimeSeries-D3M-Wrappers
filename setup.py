@@ -7,7 +7,7 @@ setup(name='TimeSeriesD3MWrappers',
     install_requires=["typing",
                       "Sloth==2.0.5"],
     dependency_links=[
-        "git+https://github.com/NewKnowledge/sloth@cd5a9bf096f1116d4b8af691f81acce432b92160#egg=Sloth-2.0.5"
+        "git+https://github.com/NewKnowledge/sloth@feb174c78b57667348e5b66213d542fbfe0797b3#egg=Sloth-2.0.5"
     ],
     entry_points = {
         'd3m.primitives': [
