@@ -102,15 +102,15 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._params = {}
         self._X_train = None          # training inputs
         self._y_train = None          # training outputs
-        self._shapelets = None        # shapelet classifier
+        self._shapelets = Shapelets(self.hyperparams['epochs'], 
+            self.hyperparams['shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
+            self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'])  
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
         fits Shapelet classifier using training data from set_training_data and hyperparameters
         '''
-        self._shapelets = Shapelets(self._X_train, self._y_train, self.hyperparams['epochs'], 
-            self.hyperparams['shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
-            self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'])
+        self._shapelets.fit(self._X_train, self._y_train)
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -158,7 +158,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = np.reshape(inputs, inputs.shape + (1,))
         # add metadata to output
         # produce classifications using Shapelets
-        classes = pandas.DataFrame(self._shapelets.PredictClasses(inputs))
+        classes = pandas.DataFrame(self._shapelets.predict(inputs))
         output_df = pandas.concat([d3mIndex_df, classes], axis = 1)
         shallot_df = d3m_DataFrame(output_df)
 
