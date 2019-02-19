@@ -7,7 +7,8 @@ from typing import List
 
 from Sloth import cluster
 
-from d3m.primitive_interfaces.base import TransformerPrimitiveBase, CallResult
+from d3m.primitive_interfaces.transformer import TransformerPrimitiveBase
+from d3m.primitive_interfaces.base import CallResult
 
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
