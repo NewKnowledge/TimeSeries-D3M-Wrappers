@@ -12,7 +12,7 @@ setup(name='TimeSeriesD3MWrappers',
     entry_points = {
         'd3m.primitives': [
             'clustering.kmeans.Sloth = TimeSeriesD3MWrappers:Storc',
-            'clustering.time_series_clustering.Hdbscan = TimeSeriesD3MWrappers:Hdbscan',
+            'clustering.hdbscan.Hdbscan = TimeSeriesD3MWrappers:Hdbscan',
             'time_series_classification.shapelet_learning.Shallot = TimeSeriesD3MWrappers:Shallot',
             'time_series_classification.k_neighbors.Kanine = TimeSeriesD3MWrappers:Kanine',
             'time_series_forecasting.arima.Parrot = TimeSeriesD3MWrappers:Parrot',
