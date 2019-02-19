@@ -3,15 +3,14 @@ import os.path
 import numpy as np
 import pandas
 
-from Sloth import cluster
+from Sloth.cluster import KMeans
 from tslearn.datasets import CachedDatasets
 
-from d3m.primitive_interfaces.transformer import TransformerPrimitiveBase
-from d3m.primitive_interfaces.base import CallResult
+from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
-from d3m.metadata import hyperparams, base as metadata_base
+from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
 from .timeseries_loader import TimeSeriesLoaderPrimitive
@@ -23,25 +22,20 @@ __contact__ = 'mailto:nklabs@newknowledge.com'
 Inputs = container.pandas.DataFrame
 Outputs = container.pandas.DataFrame
 
+class Params(params.Params):
+    pass
+
 class Hyperparams(hyperparams.Hyperparams):
     algorithm = hyperparams.Enumeration(default = 'GlobalAlignmentKernelKMeans', 
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
-        values = ['GlobalAlignmentKernelKMeans', 'TimeSeriesKMeans', 'DBSCAN', 'HDBSCAN'],
+        values = ['GlobalAlignmentKernelKMeans', 'TimeSeriesKMeans'],
         description = 'type of clustering algorithm to use')
     nclusters = hyperparams.UniformInt(lower=1, upper=sys.maxsize, default=3, semantic_types=
         ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], description = 'number of clusters \
-        to user in kernel kmeans algorithm')
-    eps = hyperparams.Uniform(lower=0, upper=sys.maxsize, default = 0.5, semantic_types = 
-        ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
-        description = 'maximum distance between two samples for them to be considered as in the same neigborhood, \
-        used in DBSCAN algorithm')
-    min_samples = hyperparams.UniformInt(lower=1, upper=sys.maxsize, default = 5, semantic_types = 
-        ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
-        description = 'number of samples in a neighborhood for a point to be considered as a core point, \
-        used in DBSCAN and HDBSCAN algorithms')   
+        to user in kernel kmeans algorithm')   
     pass
 
-class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
+class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
         Produce primitive's best guess for the cluster number of each series.
     """
@@ -77,17 +71,48 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
             }
         ],
         # The same path the primitive is registered with entry points in setup.py.
-        'python_path': 'd3m.primitives.time_series_segmentation.cluster.Sloth',
+        'python_path': 'd3m.primitives.clustering.kmeans.Sloth',
         # Choose these from a controlled vocabulary in the schema. If anything is missing which would
         # best describe the primitive, make a merge request.
         'algorithm_types': [
-            metadata_base.PrimitiveAlgorithmType.SPECTRAL_CLUSTERING,
+            metadata_base.PrimitiveAlgorithmType.K_MEANS_CLUSTERING,
         ],
-        'primitive_family': metadata_base.PrimitiveFamily.TIME_SERIES_SEGMENTATION,
+        'primitive_family': metadata_base.PrimitiveFamily.CLUSTERING,
     })
 
     def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0)-> None:
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
+
+        self._params = {}
+        self._X_train = None          # training inputs
+        self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
+
+    def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
+        '''
+        fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
+        '''
+        self._kmeans.fit(self._X_train)
+        return CallResult(None)
+
+    def get_params(self) -> Params:
+        return self._params
+
+    def set_params(self, *, params: Params) -> None:
+        self.params = params
+
+    def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
+        '''
+        Sets primitive's training data
+
+        Parameters
+        ----------
+        inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
+        
+        '''
+        # load and reshape training data
+        ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index":None})
+        inputs = ts_loader.produce(inputs = inputs).value.values
+        self._X_train = inputs
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -108,17 +133,8 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         inputs = ts_loader.produce(inputs = inputs).value
 
         # set number of clusters for k-means
-        if self.hyperparams['algorithm'] == 'TimeSeriesKMeans':
-            labels = cluster.ClusterSeriesKMeans(inputs.values, self.hyperparams['nclusters'], 'TimeSeriesKMeans')
-        elif self.hyperparams['algorithm'] == 'DBSCAN':
-            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs.values)
-            nclusters, labels, cnt = cluster.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
-        elif self.hyperparams['algorithm'] == 'HDBSCAN':
-            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs.values)
-            nclusters, labels, cnt = cluster.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_samples'])
-        else:
-            labels = cluster.ClusterSeriesKMeans(inputs.values, self.hyperparams['nclusters'], 'GlobalAlignmentKernelKMeans')       
-
+        labels = self._kmeans.predict(inputs.values)
+        
         # add metadata to output
         labels = pandas.DataFrame(labels)
         out_df_sloth = pandas.concat([d3mIndex_df, labels], axis = 1)

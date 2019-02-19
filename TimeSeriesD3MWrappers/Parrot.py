@@ -5,7 +5,7 @@ import pandas
 import typing
 from typing import List
 
-from Sloth import predict
+from Sloth.predict import Arima
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
@@ -34,7 +34,7 @@ class Hyperparams(hyperparams.Hyperparams):
        'https://metadata.datadrivendiscovery.org/types/ControlParameter'],
        description="seasonal ARIMA prediction")
     seasonal_differencing = hyperparams.UniformInt(lower = 1, upper = 365, default = 12, 
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
+        semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='period of seasonal differencing')
     pass
 
@@ -89,7 +89,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
         self._params = {}
         self._X_train = None        # training inputs
-        self._arima = None          # ARIMA classifier
+        self._arima = Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) 
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         """
@@ -97,9 +97,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
 
         # fits ARIMA model using training data from set_training_data and hyperparameters
-        self._arima = predict.FitSeriesARIMA(self._X_train, 
-                                                self.hyperparams['seasonal'],
-                                                self.hyperparams['seasonal_differencing'])
+        self._arima.fit(self._X_train)
         return CallResult(None)
         
     def get_params(self) -> Params:
@@ -137,17 +135,19 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
 
         # add metadata to output
-        # just take d3m index from input test set
-        output_df = inputs['d3mIndex']
+        # take d3m index from input test set
+        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        output_df = inputs.iloc[:, index].values
         # produce future foecast using arima
-        future_forecast = pandas.DataFrame(predict.PredictSeriesARIMA(self._arima, self.hyperparams['n_periods']))
+        future_forecast = pandas.DataFrame(self._arima.predict(self.hyperparams['n_periods']))
         output_df = pandas.concat([output_df, future_forecast], axis=1)
         parrot_df = d3m_DataFrame(output_df)
         
         # first column ('d3mIndex')
         col_dict = dict(parrot_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
-        col_dict['name'] = 'd3mIndex'
+        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        col_dict['name'] = inputs.metadata.query_column(index)['name']
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
         parrot_df.metadata = parrot_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
         # second column ('predictions')
