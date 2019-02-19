@@ -15,7 +15,7 @@ from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
-from .timeseries_loader import TimeSeriesLoaderPrimitive
+from timeseries_loader import TimeSeriesLoaderPrimitive
 
 __author__ = 'Distil'
 __version__ = '1.0.1'
@@ -133,7 +133,9 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = ts_loader.produce(inputs = inputs).value.values
         inputs = np.reshape(inputs, inputs.shape + (1,))
         self._X_train = inputs
-        self._y_train = outputs['label']
+
+        target = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        self._y_train = outputs.iloc[:, target].values
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -178,7 +180,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 if __name__ == '__main__':
         
     # Load data and preprocessing
-    input_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
+    input_dataset = container.Dataset.load('file:////Users/jeffreygleason 1/Desktop/NewKnowledge/Code/D3M/datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     ds2df_client_values = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"0"}))
     ds2df_client_labels = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
@@ -187,9 +189,9 @@ if __name__ == '__main__':
     hyperparams_class = Shallot.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     shallot_client = Shallot(hyperparams=hyperparams_class.defaults().replace({'shapelet_length': 0.4,'num_shapelet_lengths': 2, 'epochs':100}))
     shallot_client.set_training_data(inputs = df, outputs = labels)
-    shallot_client.fit()
+    #shallot_client.fit()
     
-    test_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
-    test_df = d3m_DataFrame(ds2df_client_values.produce(inputs = test_dataset).value)
-    results = shallot_client.produce(inputs = test_df)
-    print(results.value)
+    #test_dataset = container.Dataset.load('file:////Users/jeffreygleason 1/Desktop/NewKnowledge/Code/D3M/datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
+    #test_df = d3m_DataFrame(ds2df_client_values.produce(inputs = test_dataset).value)
+    #results = shallot_client.produce(inputs = test_df)
+    #print(results.value)
