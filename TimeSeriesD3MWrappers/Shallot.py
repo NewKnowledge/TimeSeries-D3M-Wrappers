@@ -134,8 +134,8 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = np.reshape(inputs, inputs.shape + (1,))
         self._X_train = inputs
 
-        target = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        self._y_train = outputs.iloc[:, target].values
+        target = outputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        self._y_train = outputs.iloc[:, target].values.reshape(-1,)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
