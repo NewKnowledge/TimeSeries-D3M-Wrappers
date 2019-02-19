@@ -137,7 +137,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # add metadata to output
         # take d3m index from input test set
         index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-        output_df = inputs.iloc[:, index].values
+        output_df = pandas.DataFrame(inputs.iloc[:, index[0]].values)
         # produce future foecast using arima
         future_forecast = pandas.DataFrame(self._arima.predict(self.hyperparams['n_periods']))
         output_df = pandas.concat([output_df, future_forecast], axis=1)
