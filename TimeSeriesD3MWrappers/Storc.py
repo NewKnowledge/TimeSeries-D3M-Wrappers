@@ -71,13 +71,13 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             }
         ],
         # The same path the primitive is registered with entry points in setup.py.
-        'python_path': 'd3m.primitives.time_series_segmentation.cluster.Sloth',
+        'python_path': 'd3m.primitives.clustering.kmeans.Sloth',
         # Choose these from a controlled vocabulary in the schema. If anything is missing which would
         # best describe the primitive, make a merge request.
         'algorithm_types': [
-            metadata_base.PrimitiveAlgorithmType.SPECTRAL_CLUSTERING,
+            metadata_base.PrimitiveAlgorithmType.K_MEANS_CLUSTERING,
         ],
-        'primitive_family': metadata_base.PrimitiveFamily.TIME_SERIES_SEGMENTATION,
+        'primitive_family': metadata_base.PrimitiveFamily.CLUSTERING,
     })
 
     def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0)-> None:
