@@ -110,10 +110,10 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         
          # set number of clusters for k-means
         if self.hyperparams['algorithm'] == 'DBSCAN':
-            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs.values)
+            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs)
             _, labels, _ = cluster.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
         else:
-            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs.values)
+            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs)
             _, labels, _ = cluster.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_samples'])
 
         # add metadata to output
