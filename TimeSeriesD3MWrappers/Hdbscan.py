@@ -139,17 +139,15 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
 if __name__ == '__main__':
 
     # Load data and preprocessing
-    input_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
+    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     ds2df_client_values = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"0"}))
-    ds2df_client_labels = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-    df = d3m_DataFrame(ds2df_client_labels.produce(inputs = input_dataset).value)
+    df = d3m_DataFrame(ds2df_client_values.produce(inputs = input_dataset).value)
     labels = d3m_DataFrame(ds2df_client_values.produce(inputs = input_dataset).value)  
-    hyperparams_class = Kanine.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    kanine_client.set_training_data(inputs = df, outputs = labels)
-    kanine_client.fit()
+    hyperparams_class = Hdbscan.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    hdbscan_client = Hdbscan(hyperparams=hyperparams_class.defaults())
     
-    test_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
+    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
     test_df = d3m_DataFrame(ds2df_client_values.produce(inputs = test_dataset).value)
-    results = kanine_client.produce(inputs = test_df)
+    results = hdbscan_client.produce(inputs = test_df)
     print(results.value)
