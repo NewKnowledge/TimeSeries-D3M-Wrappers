@@ -167,8 +167,8 @@ if __name__ == '__main__':
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     ds2df_client_values = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"0"}))
     ds2df_client_labels = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-    df = d3m_DataFrame(ds2df_client_labels.produce(inputs = input_dataset).value)
-    labels = d3m_DataFrame(ds2df_client_values.produce(inputs = input_dataset).value)  
+    df = d3m_DataFrame(ds2df_client_values.produce(inputs = input_dataset).value)
+    labels = d3m_DataFrame(ds2df_client_labels.produce(inputs = input_dataset).value)  
     hyperparams_class = Kanine.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     kanine_client = Kanine(hyperparams=hyperparams_class.defaults())
     kanine_client.set_training_data(inputs = df, outputs = labels)
