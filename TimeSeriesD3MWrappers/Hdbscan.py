@@ -103,8 +103,8 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         """
 
         # split filenames into d3mIndex (hacky)
-        ## see if you can replace 'name' with metadata query for 'timeIndicator'
-        col_name = inputs.metadata.query_column(0)['name']
+        filename_index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/FileName')
+        col_name = inputs.metadata.query_column(filename_index[0])['name']
         d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
 
         ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index":None})
