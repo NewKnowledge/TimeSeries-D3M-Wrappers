@@ -33,10 +33,12 @@ class Hyperparams(hyperparams.Hyperparams):
         ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'maximum distance between two samples for them to be considered as in the same neigborhood, \
         used in DBSCAN algorithm')
+    min_cluster_size = hyperparams.UniformInt(lower=2, upper=sys.maxsize, default = 5, semantic_types = 
+        ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
+        description = 'the minimum size of clusters')  
     min_samples = hyperparams.UniformInt(lower=1, upper=sys.maxsize, default = 5, semantic_types = 
         ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
-        description = 'number of samples in a neighborhood for a point to be considered as a core point, \
-        used in DBSCAN and HDBSCAN algorithms')   
+        description = 'The number of samples in a neighbourhood for a point to be considered a core point.')   
     pass
 
 class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
@@ -114,7 +116,7 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
             _, labels, _ = cluster.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
         else:
             SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs)
-            _, labels, _ = cluster.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_samples'])
+            _, labels, _ = cluster.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_cluster_size'], self.hyperparams['min_samples'])
 
         # add metadata to output
         labels = pandas.DataFrame(labels)
