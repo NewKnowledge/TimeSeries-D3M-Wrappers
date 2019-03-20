@@ -123,7 +123,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # use column according to hyperparameter index
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         self._X_train = pandas.Series(data = (inputs.iloc[:,targets[self.hyperparams['index']]].values).astype(np.float),
-            index = pandas.to_datetime(inputs.iloc[:, times[0]].values, format = '%Y') 
+            index = pandas.to_datetime(inputs.iloc[:, times[0]].values, format = '%Y')) 
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
