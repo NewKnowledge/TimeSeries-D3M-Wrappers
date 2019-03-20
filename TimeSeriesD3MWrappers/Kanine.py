@@ -140,7 +140,7 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # temporary (until Uncharted adds conversion primitive to repo)
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'1'})
+        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
         inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
 
         # parse values from output of time series formatter
@@ -177,7 +177,7 @@ if __name__ == '__main__':
     input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = Kanine.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams'] 
     kanine_client = Kanine(hyperparams=hyperparams_class.defaults().replace())
-    kanine_client.set_training_data(inputs = input_dataset, outputs = input_dataset)
+    kanine_client.set_training_data(inputs = input_dataset, outputs = None)
     kanine_client.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
     results = kanine_client.produce(inputs = test_dataset)
