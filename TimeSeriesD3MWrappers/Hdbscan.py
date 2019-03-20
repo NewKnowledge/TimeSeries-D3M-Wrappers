@@ -111,14 +111,14 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         inputs = inputs.value
         n_ts = len(inputs['0'].series_id.unique())
         ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        inputs = np.array(inputs['0'].value).reshape(n_ts, ts_sz)
+        input_vals = np.array(inputs['0'].value).reshape(n_ts, ts_sz)
 
         # use HP to produce DBSCAN clustering
         if self.hyperparams['algorithm'] == 'DBSCAN':
-            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs)
+            SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
             _, labels, _ = cluster.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
         else:
-            SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs)
+            SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
             _, labels, _ = cluster.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_cluster_size'], self.hyperparams['min_samples'])
 
         # add metadata to output

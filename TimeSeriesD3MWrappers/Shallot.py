@@ -162,10 +162,10 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = inputs.value
         n_ts = len(inputs['0'].series_id.unique())
         ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        inputs = np.array(inputs['0'].value).reshape(n_ts, ts_sz, 1)
+        input_vals = np.array(inputs['0'].value).reshape(n_ts, ts_sz, 1)
 
         # produce classifications using Shapelets
-        classes = pandas.DataFrame(self._shapelets.predict(inputs))
+        classes = pandas.DataFrame(self._shapelets.predict(input_vals))
         output_df = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), classes], axis = 1)
         shallot_df = d3m_DataFrame(output_df)
 

@@ -147,9 +147,9 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = inputs.value
         n_ts = len(inputs['0'].series_id.unique())
         ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        inputs = np.array(inputs['0'].value).reshape(n_ts, ts_sz)
+        input_vals = np.array(inputs['0'].value).reshape(n_ts, ts_sz)
 
-        classes = pandas.DataFrame(self._knn.predict(inputs))
+        classes = pandas.DataFrame(self._knn.predict(input_vals))
         output_df = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), classes], axis = 1)
         knn_df = d3m_DataFrame(output_df)
 

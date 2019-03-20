@@ -140,10 +140,10 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = inputs.value
         n_ts = len(inputs['0'].series_id.unique())
         ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        inputs = np.array(inputs['0'].value).reshape(n_ts, ts_sz, 1)
+        input_vals = np.array(inputs['0'].value).reshape(n_ts, ts_sz, 1)
         
         # concatenate predictions and d3mIndex
-        labels = pandas.DataFrame(self._kmeans.predict(inputs))
+        labels = pandas.DataFrame(self._kmeans.predict(input_vals))
         # maybe change d3mIndex key here to be programatically generated 
         out_df_sloth = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), labels], axis = 1)
         sloth_df = d3m_DataFrame(out_df_sloth)
