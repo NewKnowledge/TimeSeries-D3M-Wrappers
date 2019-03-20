@@ -3,8 +3,8 @@ import os.path
 import numpy as np
 import pandas
 
-from Sloth.cluster import KMeans
-from tslearn.datasets import CachedDatasets
+from statsmodels.tsa.api import VAR
+from statsmodels.tsa.base.datetools import dates_from_str
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
@@ -13,10 +13,8 @@ from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
-from timeseriesloader.timeseries_formatter import TimeSeriesFormatterPrimitive
-
 __author__ = 'Distil'
-__version__ = '2.0.3'
+__version__ = '1.0.0'
 __contact__ = 'mailto:nklabs@newknowledge.com'
 
 Inputs = container.pandas.DataFrame
@@ -25,14 +23,7 @@ Outputs = container.pandas.DataFrame
 class Params(params.Params):
     pass
 
-class Hyperparams(hyperparams.Hyperparams):
-    algorithm = hyperparams.Enumeration(default = 'GlobalAlignmentKernelKMeans', 
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
-        values = ['GlobalAlignmentKernelKMeans', 'TimeSeriesKMeans'],
-        description = 'type of clustering algorithm to use')
-    nclusters = hyperparams.UniformInt(lower=1, upper=sys.maxsize, default=3, semantic_types=
-        ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], description = 'number of clusters \
-        to user in kernel kmeans algorithm')   
+class Hyperparams(hyperparams.Hyperparams):  
     pass
 
 class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
@@ -41,11 +32,11 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".
-        'id': "77bf4b92-2faa-3e38-bb7e-804131243a7f",
+        'id': "76b5a479-c209-4d94-92b5-7eba7a4d4499",
         'version': __version__,
-        'name': "Sloth",
+        'name': "VAR",
         # Keywords do not have a controlled vocabulary. Authors can put here whatever they find suitable.
-        'keywords': ['Time Series','Clustering'],
+        'keywords': ['Time Series'],
         'source': {
             'name': __author__,
             'contact': __contact__,
@@ -71,13 +62,13 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             }
         ],
         # The same path the primitive is registered with entry points in setup.py.
-        'python_path': 'd3m.primitives.clustering.k_means.Sloth',
+        'python_path': 'd3m.primitives.time_series_forecasting.vector_autoregression.VAR',
         # Choose these from a controlled vocabulary in the schema. If anything is missing which would
         # best describe the primitive, make a merge request.
         'algorithm_types': [
-            metadata_base.PrimitiveAlgorithmType.K_MEANS_CLUSTERING,
+            metadata_base.PrimitiveAlgorithmType.VECTOR_AUTOREGRESSION,
         ],
-        'primitive_family': metadata_base.PrimitiveFamily.CLUSTERING,
+        'primitive_family': metadata_base.PrimitiveFamily.TIME_SERIES_FORECASTING,
     })
 
     def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0)-> None:
@@ -85,7 +76,6 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         self._params = {}
         self._X_train = None          # training inputs
-        self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -109,16 +99,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
         
         '''
-        # temporary (until Uncharted adds conversion primitive to repo)
-        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'1'})
-        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
-
-        # load and reshape training data
-        inputs = inputs.values
-        n_ts = len(inputs['0'].series_id.unique())
-        ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        self._X_train = inputs['0'].value.reshape(n_ts, ts_sz)
+        # use all attribute columns (and suggested target!) as training data
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -131,51 +112,51 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         Outputs
             The output is a dataframe containing a single column where each entry is the associated series' cluster number.
         """
-        # temporary (until Uncharted adds conversion primitive to repo)
-        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'1'})
-        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+        # split filenames into d3mIndex (hacky)
+        filename_index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/FileName')
+        col_name = inputs.metadata.query_column(filename_index[0])['name']
+        d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
 
-        # parse values from output of time series formatter
-        n_ts = len(inputs['0'].series_id.unique())
-        ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        inputs = inputs['0'].value.reshape(n_ts, ts_sz)
+        ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index": None})
+        inputs = ts_loader.produce(inputs = inputs).value
+
+        # set number of clusters for k-means
+        labels = self._kmeans.predict(inputs.values)
         
-        # concatenate predictions and d3mIndex
-        labels = pandas.DataFrame(self._kmeans.predict(inputs))
-        # maybe change d3mIndex key here to be programatically generated 
-        out_df_sloth = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), labels], axis = 1)
+        # add metadata to output
+        labels = pandas.DataFrame(labels)
+        out_df_sloth = pandas.concat([d3mIndex_df, labels], axis = 1)
         sloth_df = d3m_DataFrame(out_df_sloth)
         
         # first column ('d3mIndex')
         col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
-        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
-        col_dict['name'] = 'd3mIndex'        
+        col_dict['name'] = 'd3mIndex'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
         sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
         
         # second column ('labels')
         col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
         col_dict['structural_type'] = type("1")
-        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
         col_dict['name'] = 'label'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
         sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
+
+        # concatentate final output frame -- not real consensus from program, so commenting out for now
+        # out_df = utils_cp.append_columns(out_df, sloth_df)
 
         return CallResult(sloth_df)
 
 if __name__ == '__main__':
     
     # Load data and preprocessing
-    input_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
+    input_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
+    hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"0"}))
+    df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
     hyperparams_class = Storc.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     storc_client = Storc(hyperparams = hyperparams_class.defaults().replace({'algorithm':'TimeSeriesKMeans','nclusters':4}))
-    storc_client.set_training_data(inputs = input_dataset, outputs = None)
-    storc_client.fit()
-    test_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
-    results = storc_client.produce(inputs = test_dataset)
-    print(results.value)
+    result = storc_client.produce(inputs = df)
+    print(result.value)
+    result.value.to_csv('sloth_predictions.csv', index = False)
     

@@ -15,10 +15,10 @@ from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
-from .timeseries_loader import TimeSeriesLoaderPrimitive
+from timeseriesloader.timeseries_formatter import TimeSeriesFormatterPrimitive
 
 __author__ = 'Distil'
-__version__ = '1.0.0'
+__version__ = '1.0.2'
 __contact__ = 'mailto:nklabs@newknowledge.com'
 
 Inputs = container.pandas.DataFrame
@@ -102,15 +102,17 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
             The output is a dataframe containing a single column where each entry is the associated series' cluster number.
         """
 
-        # split filenames into d3mIndex (hacky)
-        filename_index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/FileName')
-        col_name = inputs.metadata.query_column(filename_index[0])['name']
-        d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
+        # temporary (until Uncharted adds conversion primitive to repo)
+        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'1'})
+        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
 
-        ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index":None})
-        inputs = ts_loader.produce(inputs = inputs).value.values
-        
-         # set number of clusters for k-means
+        # parse values from output of time series formatter
+        n_ts = len(inputs['0'].series_id.unique())
+        ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
+        inputs = inputs['0'].value.reshape(n_ts, ts_sz)
+
+        # use HP to produce DBSCAN clustering
         if self.hyperparams['algorithm'] == 'DBSCAN':
             SimilarityMatrix = cluster.GenerateSimilarityMatrix(inputs)
             _, labels, _ = cluster.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
@@ -120,12 +122,15 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
 
         # add metadata to output
         labels = pandas.DataFrame(labels)
-        out_df= pandas.concat([d3mIndex_df, labels], axis = 1)
+        out_df= pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), labels], axis = 1)
         hdbscan_df = d3m_DataFrame(out_df)
         
         # first column ('d3mIndex')
         col_dict = dict(hdbscan_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
+        # confirm that this metadata still exists
+        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
         col_dict['name'] = 'd3mIndex'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
         hdbscan_df.metadata = hdbscan_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
@@ -133,6 +138,8 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         # second column ('labels')
         col_dict = dict(hdbscan_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
         col_dict['structural_type'] = type("1")
+        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
         col_dict['name'] = 'label'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
         hdbscan_df.metadata = hdbscan_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
@@ -142,15 +149,8 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
 if __name__ == '__main__':
 
     # Load data and preprocessing
-    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
-    hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    ds2df_client_values = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"0"}))
-    df = d3m_DataFrame(ds2df_client_values.produce(inputs = input_dataset).value)
-    labels = d3m_DataFrame(ds2df_client_values.produce(inputs = input_dataset).value)  
     hyperparams_class = Hdbscan.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     hdbscan_client = Hdbscan(hyperparams=hyperparams_class.defaults())
-    
-    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
-    test_df = d3m_DataFrame(ds2df_client_values.produce(inputs = test_dataset).value)
-    results = hdbscan_client.produce(inputs = test_df)
+    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
+    results = hdbscan_client.produce(inputs = test_dataset)
     print(results.value)

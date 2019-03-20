@@ -1,13 +1,15 @@
 from distutils.core import setup
 
 setup(name='TimeSeriesD3MWrappers',
-    version='1.0.2',
+    version='1.0.3',
     description='Five wrappers for interacting with New Knowledge time series tool Sloth',
     packages=['TimeSeriesD3MWrappers'],
     install_requires=["typing",
-                      "Sloth==2.0.5"],
+                      "Sloth==2.0.5",
+                      "distil-timeseries-loader"],
     dependency_links=[
-        "git+https://github.com/NewKnowledge/sloth@fd86004a67965065cf1687f9d756c2ed7493d1a9#egg=Sloth-2.0.5"
+        "git+https://github.com/NewKnowledge/sloth@fd86004a67965065cf1687f9d756c2ed7493d1a9#egg=Sloth-2.0.5",
+        "git+https://github.com/uncharted-distil/distil-timeseries-loader@f64d97f39d42a74476529883a8cf1ecddfec4c87#egg=DistilTimeSeriesLoader"
     ],
     entry_points = {
         'd3m.primitives': [

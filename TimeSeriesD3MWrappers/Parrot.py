@@ -26,7 +26,7 @@ class Params(params.Params):
 
 # default values chosen for 56_sunspots 'sunspot.year' seed dataset
 class Hyperparams(hyperparams.Hyperparams):
-    index = hyperparams.UniformInt(lower = 0, upper = sys.maxsize, default = 0, semantic_types=[
+    index = hyperparams.Enumeration(default = 0, values = [0,1], semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/ControlParameter'], description='index of which suggestedTarget to predict')
     n_periods = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 29, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/ControlParameter'], description='number of periods to predict')
@@ -97,6 +97,8 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
 
         # fits ARIMA model using training data from set_training_data and hyperparameters
+
+        # edit ARIMA to ingest datetime with index
         self._arima.fit(self._X_train)
         return CallResult(None)
         
@@ -115,10 +117,13 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs : pandas data frame containing training data where first column contains dates and second column contains values
         
         """
-
+        # identify timeIndicator column for time series dates
+        times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
+        
         # use column according to hyperparameter index
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        self._X_train = (inputs.iloc[:,targets[self.hyperparams['index']]].values).astype(np.float)
+        self._X_train = pandas.Series(data = (inputs.iloc[:,targets[self.hyperparams['index']]].values).astype(np.float),
+            index = pandas.to_datetime(inputs.iloc[:, times[0]].values, format = '%Y') 
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """

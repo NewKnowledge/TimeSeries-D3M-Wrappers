@@ -14,10 +14,10 @@ from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
-from .timeseries_loader import TimeSeriesLoaderPrimitive
+from timeseriesloader.timeseries_formatter import TimeSeriesFormatterPrimitive
 
 __author__ = 'Distil'
-__version__ = '1.0.0'
+__version__ = '1.0.2'
 __contact__ = 'mailto:nklabs@newknowledge.com'
 
 Inputs = container.pandas.DataFrame
@@ -112,13 +112,17 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         outputs: numpy ndarray of size (number_time_series,) containing classes of training time series
         '''
 
+        # temporary (until Uncharted adds conversion primitive to repo)
+        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'1'})
+        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+
         # load and reshape training data
-        ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index":None})
-        inputs = ts_loader.produce(inputs = inputs).value.values
-        self._X_train = inputs
-        
-        target = outputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        self._y_train = outputs.iloc[:, target].values.reshape(-1,)
+        inputs = inputs.values
+        n_ts = len(inputs['0'].series_id.unique())
+        ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
+        self._X_train = inputs['0'].value.reshape(n_ts, ts_sz, 1)
+        self._y_train = inputs['0'].label.unique().reshape(-1,)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -134,27 +138,34 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             The output is a numpy ndarray containing a predicted class for each of the input time series
         """
 
-        # split filenames into d3mIndex (hacky)
-        filename_index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/FileName')
-        col_name = inputs.metadata.query_column(filename_index[0])['name']
-        d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
+        # temporary (until Uncharted adds conversion primitive to repo)
+        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'1'})
+        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
 
-        ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index":None})
-        inputs = ts_loader.produce(inputs = inputs).value.values
+        # parse values from output of time series formatter
+        n_ts = len(inputs['0'].series_id.unique())
+        ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
+        inputs = inputs['0'].value.reshape(n_ts, ts_sz)
 
         classes = pandas.DataFrame(self._knn.predict(inputs))
-        output_df = pandas.concat([d3mIndex_df, classes], axis = 1)
+        output_df = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), classes], axis = 1)
         knn_df = d3m_DataFrame(output_df)
 
         # first column ('d3mIndex')
         col_dict = dict(knn_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
+        # confirm that this metadata still exists
+        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
         col_dict['name'] = 'd3mIndex'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
         knn_df.metadata = knn_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
         # second column ('predictions')
         col_dict = dict(knn_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
         col_dict['structural_type'] = type("1")
+        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
         col_dict['name'] = 'label'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
         knn_df.metadata = knn_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
@@ -163,18 +174,11 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 if __name__ == '__main__':
 
     # Load data and preprocessing
-    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
-    hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    ds2df_client_values = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"0"}))
-    ds2df_client_labels = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-    df = d3m_DataFrame(ds2df_client_values.produce(inputs = input_dataset).value)
-    labels = d3m_DataFrame(ds2df_client_labels.produce(inputs = input_dataset).value)  
-    hyperparams_class = Kanine.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    kanine_client = Kanine(hyperparams=hyperparams_class.defaults())
-    kanine_client.set_training_data(inputs = df, outputs = labels)
+    input_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
+    hyperparams_class = Kanine.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams'] 
+    kanine_client = Kanine(hyperparams=hyperparams_class.defaults().replace())
+    kanine_client.set_training_data(inputs = input_dataset, outputs = input_dataset)
     kanine_client.fit()
-    
-    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
-    test_df = d3m_DataFrame(ds2df_client_values.produce(inputs = test_dataset).value)
-    results = kanine_client.produce(inputs = test_df)
+    test_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
+    results = kanine_client.produce(inputs = test_dataset)
     print(results.value)
