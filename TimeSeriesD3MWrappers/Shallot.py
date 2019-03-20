@@ -191,11 +191,11 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 if __name__ == '__main__':
         
     # Load data and preprocessing
-    input_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
+    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = Shallot.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams'] 
     shallot_client = Shallot(hyperparams=hyperparams_class.defaults().replace({'shapelet_length': 0.4,'num_shapelet_lengths': 2, 'epochs':100}))
     shallot_client.set_training_data(inputs = input_dataset, outputs = input_dataset)
     shallot_client.fit()
-    test_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
+    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
     results = shallot_client.produce(inputs = test_dataset)
     print(results.value)
