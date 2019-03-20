@@ -104,7 +104,7 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
 
         # temporary (until Uncharted adds conversion primitive to repo)
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'1'})
+        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
         inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
 
         # parse values from output of time series formatter
