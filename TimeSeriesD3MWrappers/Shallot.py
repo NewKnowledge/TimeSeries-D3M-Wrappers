@@ -134,11 +134,11 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
 
         # load and reshape training data
-        inputs = inputs.values
+        inputs = inputs.value
         n_ts = len(inputs['0'].series_id.unique())
         ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        self._X_train = inputs['0'].value.reshape(n_ts, ts_sz, 1)
-        self._y_train = inputs['0'].label.unique().reshape(-1,)
+        self._X_train = np.array(inputs['0'].value).reshape(n_ts, ts_sz, 1)
+        self._y_train = np.array(inputs['0'].label.iloc[::ts_sz]).reshape(-1,)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
