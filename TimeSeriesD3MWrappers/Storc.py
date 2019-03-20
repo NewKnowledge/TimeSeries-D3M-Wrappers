@@ -137,6 +137,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
 
         # parse values from output of time series formatter
+        inputs = inputs.value
         n_ts = len(inputs['0'].series_id.unique())
         ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
         inputs = inputs['0'].value.reshape(n_ts, ts_sz)
