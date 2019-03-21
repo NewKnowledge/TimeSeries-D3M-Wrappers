@@ -21,7 +21,7 @@ __version__ = '1.0.2'
 __contact__ = 'mailto:nklabs@newknowledge.com'
 
 Inputs = container.dataset.Dataset
-Outputs = container.pandas.DataFrame
+Outputs = container.dataset.Dataset
 
 class Params(params.Params):
     pass
