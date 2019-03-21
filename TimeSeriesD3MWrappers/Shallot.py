@@ -21,7 +21,7 @@ __author__ = 'Distil'
 __version__ = '1.0.2'
 __contact__ = 'mailto:nklabs@newknowledge.com'
 
-Inputs = container.pandas.DataFrame
+Inputs = container.dataset.Dataset
 Outputs = container.pandas.DataFrame
 
 class Params(params.Params):
