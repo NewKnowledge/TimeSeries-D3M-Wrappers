@@ -6,10 +6,10 @@ setup(name='TimeSeriesD3MWrappers',
     packages=['TimeSeriesD3MWrappers'],
     install_requires=["typing",
                       "Sloth==2.0.5",
-                      "DistilTimeSeriesLoader==0.1.0"],
+                      "DistilTimeSeriesLoader==0.1.1"],
     dependency_links=[
         "git+https://github.com/NewKnowledge/sloth@fd86004a67965065cf1687f9d756c2ed7493d1a9#egg=Sloth-2.0.5",
-        "git+https://github.com/uncharted-distil/distil-timeseries-loader@e218c02ca41deccab94da30bf492bcb74eeb6c78#egg=DistilTimeSeriesLoader-0.1.0"
+        "git+https://github.com/uncharted-distil/distil-timeseries-loader@a2e5596c0b06e4a3efccb21f6ff26a1b5cfc62ff#egg=DistilTimeSeriesLoader-0.1.1"
     ],
     entry_points = {
         'd3m.primitives': [
