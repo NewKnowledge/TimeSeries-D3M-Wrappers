@@ -9,7 +9,7 @@ setup(name='TimeSeriesD3MWrappers',
                       "DistilTimeSeriesLoader==0.1.1"],
     dependency_links=[
         "git+https://github.com/NewKnowledge/sloth@fd86004a67965065cf1687f9d756c2ed7493d1a9#egg=Sloth-2.0.5",
-        "git+https://github.com/uncharted-distil/distil-timeseries-loader.git@1750a84bf18922e0d9659f49ce7134dc16a7fb86#egg=DistilTimeSeriesLoader-0.1.1"
+        "git+https://github.com/uncharted-distil/distil-timeseries-loader.git@ad36f7356d6430c1dc977176bf8ac805b37b2882#egg=DistilTimeSeriesLoader-0.1.1"
     ],
     entry_points = {
         'd3m.primitives': [
