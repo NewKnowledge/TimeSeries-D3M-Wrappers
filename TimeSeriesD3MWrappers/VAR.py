@@ -5,6 +5,7 @@ import pandas
 
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.base.datetools import dates_from_str
+import statsmodels.api as sm
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
@@ -24,9 +25,23 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):  
-    pass
+    filter_name = hyperparams.Hyperparamter[typing.Union[str, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='index of column in input dataset that contain unique identifiers of different \
+        time series')
+    n_periods = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 30, semantic_types=[
+       'https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+       description='number of periods to predict')
+    max_lags = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 15, semantic_types=[
+       'https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+       description='maximum lag order to evluate to find model - eval criterion = AIC')
+    datetime_index = hyperparams.Hyperparamter[typing.Union[int, None]](
+        default = 0,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
+        description='if multiple datetime indices exist, this HP specifies which to apply to training data')
 
-class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
+class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
         Produce primitive's best guess for the cluster number of each series.
     """
@@ -75,13 +90,23 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
         self._params = {}
-        self._X_train = None          # training inputs
+        self._X_train = None 
+        self._fit = None
+        self._colnames = None
+        self._final_logs = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
-        fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
+        fits VAR model. Evaluates different lag orders up to maxlags, eval criterion = AIC
         '''
-        self._kmeans.fit(self._X_train)
+        
+        # log transformation for standardization, difference, drop NAs
+        self._X_train = np.log(self._X_train)
+        self._final_logs = self._X_train.iloc[-1,:].values
+        self._X_train = self._X_train.diff().dropna()
+
+        var_model = VAR(endog = self._y_train, dates = self._X_train.index)
+        self._fit = var_model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -96,67 +121,109 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         Parameters
         ----------
-        inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
+        inputs: input d3m_dataframe containing n columns of features
         
         '''
-        # use all attribute columns (and suggested target!) as training data
+        inputs = inputs.value
+        times = inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
+        time_index = times[self.hyperparams['datetime_index']
+        inputs.index = pd.DatetimeIndex(inputs.iloc[:,time_index], freq='infer')
+        list_of_ts = [inputs[inputs[self.hyperparams['filter_name']] == value].iloc[:,time_index] for value in inputs[self.hyperparams['filter_name']].unique()]
+        inputs = inputs[inputs.iloc[:, times[0]].isin(list(set.intersection(*map(set,list_of_ts))))]
+
+        # eliminate categorical variables and primary key
+        cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
+        key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        inputs.drop(inputs.columns[cat + key + times],axis=1,inplace=True)
+        
+        # check that targets aren't categorical
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        if not len(targets):
+            raise ValueError("All suggested targets are categorical variable. VAR cannot regress on categorical variables")
+    
+        # set training data and colnames
+        self._X_train = inputs
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
+        Produce primitive's prediction for future time series data
+
         Parameters
         ----------
-        inputs : Input pandas frame where each row is a series.  Series timestamps are store in the column names.
+        None
 
         Returns
-        -------
+        ----------
         Outputs
-            The output is a dataframe containing a single column where each entry is the associated series' cluster number.
+            The output is a data frame containing the d3m index and a forecast for each of the 'n_periods' future time periods
+            The default is a future forecast for each of the selected input variables. This can be modified to just one output 
+                variable with the associated HP
         """
-        # split filenames into d3mIndex (hacky)
-        filename_index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/FileName')
-        col_name = inputs.metadata.query_column(filename_index[0])['name']
-        d3mIndex_df = pandas.DataFrame([int(filename.split('_')[0]) for filename in inputs[col_name]])
 
-        ts_loader = TimeSeriesLoaderPrimitive(hyperparams = {"time_col_index":0, "value_col_index":1, "file_col_index": None})
-        inputs = ts_loader.produce(inputs = inputs).value
-
-        # set number of clusters for k-means
-        labels = self._kmeans.predict(inputs.values)
-        
         # add metadata to output
-        labels = pandas.DataFrame(labels)
-        out_df_sloth = pandas.concat([d3mIndex_df, labels], axis = 1)
-        sloth_df = d3m_DataFrame(out_df_sloth)
+        # take d3m index from input test set
+        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        output_df = pandas.DataFrame(inputs.iloc[:, index[0]].values)
+        
+        # produce future foecast using VAR
+        future_forecast = self._fit.forecast(self._X_train.values[-self._fit.k_ar], self.hyperparams['n_periods'])
+        
+        # undo differencing transformations self._X_train[-1].values)
+        future_forecast = pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + self._final_logs)
+
+        # select desired columns to return
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        self._colnames = [inputs.metadata.query_column(targets[target])['name'] for target in targets]
+        future_forecast = future_forecast[self._colnames]
+        
+        output_df = pandas.concat([output_df, future_forecast], axis=1)
+        # get column names from metadata
+        output_df.columns = [inputs.metadata.query_column(index[0])['name']] + self._colnames
+        var_df = d3m_DataFrame(output_df)
         
         # first column ('d3mIndex')
-        col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
+        col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
-        col_dict['name'] = 'd3mIndex'
+        col_dict['name'] = inputs.metadata.query_column(index[0])['name']
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
-        sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
-        
-        # second column ('labels')
-        col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
-        col_dict['structural_type'] = type("1")
-        col_dict['name'] = 'label'
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
-        sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
+        var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
-        # concatentate final output frame -- not real consensus from program, so commenting out for now
-        # out_df = utils_cp.append_columns(out_df, sloth_df)
+        #('predictions')
+        for index, name in zip(range(len(future_forecast.columns), self._colnames)):
+            col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
+            col_dict['structural_type'] = type("1")
+            col_dict['name'] = name
+            col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
+            var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index), col_dict)
 
-        return CallResult(sloth_df)
+        return CallResult(var_df)
+
+    '''
+    def produce_weights(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
+        """
+        Produce primitive's prediction for future time series data
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        ----------
+        Outputs
+            The output is a data frame containing the d3m index and a forecast for each of the 'n_periods' future time periods
+            The default is a future forecast for each of the selected input variables. This can be modified to just one output 
+                variable with the associated HP
+        """
+    '''
 
 if __name__ == '__main__':
     
-    # Load data and preprocessing
-    input_dataset = container.Dataset.load('file:///data/home/jgleason/D3m/datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
-    hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"0"}))
-    df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
-    hyperparams_class = Storc.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    storc_client = Storc(hyperparams = hyperparams_class.defaults().replace({'algorithm':'TimeSeriesKMeans','nclusters':4}))
-    result = storc_client.produce(inputs = df)
-    print(result.value)
-    result.value.to_csv('sloth_predictions.csv', index = False)
+    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TRAIN/dataset_TRAIN/datasetDoc.json')
+    hyperparams_class = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    var = VAR(hyperparams = hyperparams_class.defaults().replace({'n_periods':30}))
+    var.set_training_data(inputs = input_dataset, outputs = None)
+    var.fit()
+    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
+    results = var.produce(inputs = test_dataset)
+    print(results.value)
     
