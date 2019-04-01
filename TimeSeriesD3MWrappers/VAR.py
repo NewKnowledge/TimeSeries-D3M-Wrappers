@@ -138,7 +138,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # set datetime index
         times = inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
         time_index = times[self.hyperparams['datetime_index']]
-        inputs.index = pd.DatetimeIndex(inputs.iloc[:,time_index])
+        inputs.index = pandas.DatetimeIndex(inputs.iloc[:,time_index])
 
         # eliminate categorical variables, times, primary key
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
@@ -157,10 +157,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             filter_dfs = [inputs]
         min_date = min(inputs.iloc[:,time_index])
         max_date = max(inputs.iloc[:,time_index])
-        reind = [df[1].reindex(pd.date_range(min_date, max_date)) for df in filter_dfs]
+        reind = [df[1].reindex(pandas.date_range(min_date, max_date)) for df in filter_dfs]
         interpolated = [df.astype(float).interpolate(method='time', limit_direction = 'both') for df in reind]
         self._target_length = interpolated[0].shape[1]
-        vals = pd.concat(interpolated, axis=1)
+        vals = pandas.concat(interpolated, axis=1)
         self._X_train = vals
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
@@ -195,7 +195,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if self.hyperparams['interval']:
             future_forecast = future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:]
         if self.hyperparams['filter_name']:
-            future_forecast = pd.DataFrame(future_forecast.values.reshape((-1,self._target_length), order='F'))
+            future_forecast = pandas.DataFrame(future_forecast.values.reshape((-1,self._target_length), order='F'))
 
         # select desired columns to return
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
