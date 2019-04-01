@@ -4,7 +4,6 @@ import numpy as np
 import pandas
 
 from statsmodels.tsa.api import VAR
-from statsmodels.tsa.base.datetools import dates_from_str
 import statsmodels.api as sm
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
@@ -12,7 +11,7 @@ from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
-from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
+from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, dataset_regex_filter
 
 __author__ = 'Distil'
 __version__ = '1.0.0'
@@ -30,12 +29,22 @@ class Hyperparams(hyperparams.Hyperparams):
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of column in input dataset that contain unique identifiers of different \
         time series')
-    n_periods = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 30, semantic_types=[
-       'https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+    n_periods = hyperparams.UniformInt(
+        lower = 1, 
+        upper = sys.maxsize, 
+        default = 30, 
+        semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
        description='number of periods to predict')
-    max_lags = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 15, semantic_types=[
-       'https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-       description='maximum lag order to evluate to find model - eval criterion = AIC')
+    interval = hyperparams.Hyperparamter[typing.Union[int, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='interval with which to sample future predictions')
+    max_lags = hyperparams.UniformInt(
+        lower = 1, 
+        upper = sys.maxsize, 
+        default = 15, 
+        semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='maximum lag order to evluate to find model - eval criterion = AIC'),
     datetime_index = hyperparams.Hyperparamter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
@@ -90,9 +99,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
         self._params = {}
+        self._target_length = None
         self._X_train = None 
-        self._fit = None
-        self._colnames = None
+        self._var = None
         self._final_logs = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
@@ -101,12 +110,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
         
         # log transformation for standardization, difference, drop NAs
-        self._X_train = np.log(self._X_train)
-        self._final_logs = self._X_train.iloc[-1,:].values
-        self._X_train = self._X_train.diff().dropna()
+        values = np.log(self._X_train.values)
+        self._final_logs = values[-1:,]
+        values = np.diff(values,axis=0)
 
-        var_model = VAR(endog = self._y_train, dates = self._X_train.index)
-        self._fit = var_model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
+        var_model = VAR(endog = values, dates = self._X_train.index)
+        self._var = var_model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -125,24 +134,34 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         '''
         inputs = inputs.value
-        times = inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
-        time_index = times[self.hyperparams['datetime_index']
-        inputs.index = pd.DatetimeIndex(inputs.iloc[:,time_index], freq='infer')
-        list_of_ts = [inputs[inputs[self.hyperparams['filter_name']] == value].iloc[:,time_index] for value in inputs[self.hyperparams['filter_name']].unique()]
-        inputs = inputs[inputs.iloc[:, times[0]].isin(list(set.intersection(*map(set,list_of_ts))))]
 
-        # eliminate categorical variables and primary key
+        # set datetime index
+        times = inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
+        time_index = times[self.hyperparams['datetime_index']]
+        inputs.index = pd.DatetimeIndex(inputs.iloc[:,time_index])
+
+        # eliminate categorical variables, times, primary key
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-        inputs.drop(inputs.columns[cat + key + times],axis=1,inplace=True)
-        
+
         # check that targets aren't categorical
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         if not len(targets):
-            raise ValueError("All suggested targets are categorical variable. VAR cannot regress on categorical variables")
-    
-        # set training data and colnames
-        self._X_train = inputs
+            raise ValueError("All suggested targets are categorical variables. VAR cannot regress on categorical variables")
+        inputs.drop(inputs.columns[cat + key + times],axis = 1, inplace = True)
+
+        # for each filter value, reindex and interpolate daily values
+        if self.hyperparams['filter_name']:
+            filter_dfs = list(inputs.groupby(self.hyperparams['filter_name']))
+        else:
+            filter_dfs = [inputs]
+        min_date = min(inputs.iloc[:,time_index])
+        max_date = max(inputs.iloc[:,time_index])
+        reind = [df[1].reindex(pd.date_range(min_date, max_date)) for df in filter_dfs]
+        interpolated = [df.astype(float).interpolate(method='time', limit_direction = 'both') for df in reind]
+        self._target_length = interpolated[0].shape[1]
+        vals = pd.concat(interpolated, axis=1)
+        self._X_train = vals
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -164,21 +183,27 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # take d3m index from input test set
         index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         output_df = pandas.DataFrame(inputs.iloc[:, index[0]].values)
+        output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR
-        future_forecast = self._fit.forecast(self._X_train.values[-self._fit.k_ar], self.hyperparams['n_periods'])
+        future_forecast = self._var.forecast(self._X_train.values[-self._var.k_ar], self.hyperparams['n_periods'])
         
-        # undo differencing transformations self._X_train[-1].values)
-        future_forecast = pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + self._final_logs)
+        # undo differencing transformations 
+        future_forecast = pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + self._final_logs))
+
+        # filter forecast according to interval, resahpe according to filter_name
+        if self.hyperparams['interval']:
+            future_forecast = future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:]
+        if self.hyperparams['filter_name']:
+            future_forecast = pd.DataFrame(future_forecast.values.reshape((-1,self._target_length), order='F'))
 
         # select desired columns to return
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         self._colnames = [inputs.metadata.query_column(targets[target])['name'] for target in targets]
+        future_forecast.columns = list(set(self._X_train))
         future_forecast = future_forecast[self._colnames]
         
         output_df = pandas.concat([output_df, future_forecast], axis=1)
-        # get column names from metadata
-        output_df.columns = [inputs.metadata.query_column(index[0])['name']] + self._colnames
         var_df = d3m_DataFrame(output_df)
         
         # first column ('d3mIndex')
@@ -219,8 +244,18 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 if __name__ == '__main__':
     
     input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TRAIN/dataset_TRAIN/datasetDoc.json')
-    hyperparams_class = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = hyperparams_class.defaults().replace({'n_periods':30}))
+    
+    # filter dataset by year - (add recursively over every year)
+    hp_class = dataset_regex_filter.RegexFilterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    filter_client = dataset_regex_filter.RegexFilterPrimitive(hyperparams = hp_class.defaults().replace({"resource_id":"learningData", "column":2, "regex":"2013"}))
+    vals = filter_client.produce(inputs = input_dataset)
+    hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+    df = d3m_DataFrame(ds2df_client.produce(inputs = filter_client.produce(inputs = input_dataset).value).value)
+    
+    # VAR primitive
+    var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    var = VAR(hyperparams = hyperparams_class.defaults().replace({'filter_name':'Company','n_periods':52, 'interval':26}))
     var.set_training_data(inputs = input_dataset, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
