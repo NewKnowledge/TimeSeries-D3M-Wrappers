@@ -24,7 +24,7 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):  
-    filter_name = hyperparams.Hyperparamter[typing.Union[str, None]](
+    filter_name = hyperparams.Hyperparameter[typing.Union[str, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of column in input dataset that contain unique identifiers of different \
@@ -35,7 +35,7 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 30, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
        description='number of periods to predict')
-    interval = hyperparams.Hyperparamter[typing.Union[int, None]](
+    interval = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='interval with which to sample future predictions')
@@ -45,7 +45,7 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 15, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='maximum lag order to evluate to find model - eval criterion = AIC'),
-    datetime_index = hyperparams.Hyperparamter[typing.Union[int, None]](
+    datetime_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='if multiple datetime indices exist, this HP specifies which to apply to training data')
