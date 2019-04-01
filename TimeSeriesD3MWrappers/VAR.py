@@ -2,6 +2,7 @@ import sys
 import os.path
 import numpy as np
 import pandas
+import typing
 
 from statsmodels.tsa.api import VAR
 import statsmodels.api as sm
