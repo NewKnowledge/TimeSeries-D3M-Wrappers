@@ -50,6 +50,7 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='if multiple datetime indices exist, this HP specifies which to apply to training data')
+    pass
 
 class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
