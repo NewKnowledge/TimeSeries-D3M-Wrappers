@@ -258,7 +258,7 @@ if __name__ == '__main__':
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     var = VAR(hyperparams = var_hp.defaults().replace({'filter_name':'Company','n_periods':52, 'interval':26}))
-    var.set_training_data(inputs = input_dataset, outputs = None)
+    var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
     results = var.produce(inputs = test_dataset)
