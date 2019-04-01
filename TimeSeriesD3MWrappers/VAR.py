@@ -92,7 +92,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # Choose these from a controlled vocabulary in the schema. If anything is missing which would
         # best describe the primitive, make a merge request.
         'algorithm_types': [
-            metadata_base.PrimitiveAlgorithmType.VECTOR_AUTOREGRESSION,
+            metadata_base.PrimitiveAlgorithmType.VECTOR_AUTOREGRESSION
         ],
         'primitive_family': metadata_base.PrimitiveFamily.TIME_SERIES_FORECASTING,
     })
