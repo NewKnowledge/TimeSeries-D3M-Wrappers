@@ -135,8 +135,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs: input d3m_dataframe containing n columns of features
         
         '''
-        inputs = inputs.value
-
         # set datetime index
         times = inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
         time_index = times[self.hyperparams['datetime_index']]
