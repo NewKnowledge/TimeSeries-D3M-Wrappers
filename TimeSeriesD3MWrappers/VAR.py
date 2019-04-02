@@ -186,7 +186,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR
-        future_forecast = self._var.forecast(self._values[-self._var.k_ar], self.hyperparams['n_periods'])
+        future_forecast = self._var.forecast(self._values[-self._var.k_ar:], self.hyperparams['n_periods'])
         
         # undo differencing transformations 
         future_forecast = pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + self._final_logs))
@@ -259,6 +259,6 @@ if __name__ == '__main__':
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
-    results = var.produce(inputs = ds2df_client.produce(inputs = test_dataset).value)
+    results = var.produce(inputs = ds2df_client.produce(inputs = filter_client.produce(inputs = test_dataset).value).value)
     print(results.value)
     
