@@ -159,7 +159,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         else:
             year_dfs = [inputs]
         if self.hyperparams['filter_index']:
-            company_dfs = [list(year.groupby(year.columns[self.hyperparams['filter_index']])) for year in year_dfs]
+            company_dfs = [list(year[1].groupby(year[1].columns[self.hyperparams['filter_index']])) for year in year_dfs]
         else:
             company_dfs = [year_dfs]
         reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year.iloc[:,time_index]), 
