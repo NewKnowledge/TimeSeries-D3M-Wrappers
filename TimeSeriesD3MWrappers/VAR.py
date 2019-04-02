@@ -162,14 +162,15 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             company_dfs = [list(year[1].groupby(year[1].columns[self.hyperparams['filter_index']])) for year in year_dfs]
         else:
             company_dfs = [year_dfs]
-        reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year.iloc[:,time_index]), 
-                max(year.iloc[:,time_index]))) for company in year] for year in company_dfs]
+        reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].iloc[:,time_index]), 
+                max(year[0][1].iloc[:,time_index]))) for company in year] for year in company_dfs]
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
         self._target_length = interpolated[0][0].shape[1]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
         self._X_train = vals
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
+
         """
         Produce primitive's prediction for future time series data
 
