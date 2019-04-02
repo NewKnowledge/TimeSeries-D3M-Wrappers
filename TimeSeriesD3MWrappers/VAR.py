@@ -214,7 +214,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
         #('predictions')
-        for index, name in zip(range(len(future_forecast.columns), colnames)):
+        for index, name in zip(range(len(colnames)), colnames):
             col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
             col_dict['structural_type'] = type("1")
             col_dict['name'] = name
