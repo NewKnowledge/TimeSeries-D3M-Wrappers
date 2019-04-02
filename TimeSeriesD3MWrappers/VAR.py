@@ -199,9 +199,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # select desired columns to return
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        self._colnames = [inputs.metadata.query_column(targets[target])['name'] for target in targets]
+        colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
         future_forecast.columns = list(set(self._X_train))
-        future_forecast = future_forecast[self._colnames]
+        future_forecast = future_forecast[colnames]
         
         output_df = pandas.concat([output_df, future_forecast], axis=1)
         var_df = d3m_DataFrame(output_df)
@@ -214,7 +214,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
         #('predictions')
-        for index, name in zip(range(len(future_forecast.columns), self._colnames)):
+        for index, name in zip(range(len(future_forecast.columns), colnames)):
             col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
             col_dict['structural_type'] = type("1")
             col_dict['name'] = name
@@ -259,6 +259,6 @@ if __name__ == '__main__':
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
-    results = var.produce(inputs = ds2df_client.produce(inputs = filter_client.produce(inputs = test_dataset).value).value)
+    results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = filter_client.produce(inputs = test_dataset).value).value))
     print(results.value)
     
