@@ -45,7 +45,7 @@ class Hyperparams(hyperparams.Hyperparams):
         upper = sys.maxsize, 
         default = 15, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='maximum lag order to evluate to find model - eval criterion = AIC'),
+        description='maximum lag order to evluate to find model - eval criterion = AIC')
     datetime_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
