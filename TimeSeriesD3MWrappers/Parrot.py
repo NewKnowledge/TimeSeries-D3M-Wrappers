@@ -26,8 +26,10 @@ class Params(params.Params):
 
 # default values chosen for 56_sunspots 'sunspot.year' seed dataset
 class Hyperparams(hyperparams.Hyperparams):
-    index = hyperparams.Enumeration(default = 0, values = [0,1], semantic_types=[
-       'https://metadata.datadrivendiscovery.org/types/ControlParameter'], description='index of which suggestedTarget to predict')
+    index = hyperparams.Hyperparamter[typing.Union[int, None]](
+        default = 0,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='index of which suggestedTarget to predict')
     n_periods = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 29, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/ControlParameter'], description='number of periods to predict')
     seasonal = hyperparams.UniformBool(default = True, semantic_types = [
@@ -146,19 +148,20 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # produce future foecast using arima
         future_forecast = pandas.DataFrame(self._arima.predict(self.hyperparams['n_periods']))
         output_df = pandas.concat([output_df, future_forecast], axis=1)
+        # get column names from metadata
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        output_df.columns = [inputs.metadata.query_column(index[0])['name'], inputs.metadata.query_column(targets[self.hyperparams['index']])['name']]
         parrot_df = d3m_DataFrame(output_df)
         
         # first column ('d3mIndex')
         col_dict = dict(parrot_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
-        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         col_dict['name'] = inputs.metadata.query_column(index[0])['name']
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
         parrot_df.metadata = parrot_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
         # second column ('predictions')
         col_dict = dict(parrot_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
         col_dict['structural_type'] = type("1")
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         col_dict['name'] = inputs.metadata.query_column(targets[self.hyperparams['index']])['name']
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
         parrot_df.metadata = parrot_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)

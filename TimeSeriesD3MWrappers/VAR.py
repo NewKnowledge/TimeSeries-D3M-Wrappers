@@ -148,7 +148,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         if not len(targets):
             raise ValueError("All suggested targets are categorical variables. VAR cannot regress on categorical variables")
-        inputs.drop(inputs.columns[cat + key + times],axis = 1, inplace = True)
 
         # for each filter value, reindex and interpolate daily values
         if self.hyperparams['filter_name']:
@@ -157,7 +156,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             filter_dfs = [inputs]
         min_date = min(inputs.iloc[:,time_index])
         max_date = max(inputs.iloc[:,time_index])
-        reind = [df[1].reindex(pandas.date_range(min_date, max_date)) for df in filter_dfs]
+        reind = [df[1].drop(df.columns[cat + key + times], axis = 1, inplace = True).reindex(pandas.date_range(min_date, max_date)) for df in filter_dfs]
         interpolated = [df.astype(float).interpolate(method='time', limit_direction = 'both') for df in reind]
         self._target_length = interpolated[0].shape[1]
         vals = pandas.concat(interpolated, axis=1)

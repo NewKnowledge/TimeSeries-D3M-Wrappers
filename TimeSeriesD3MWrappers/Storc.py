@@ -115,6 +115,8 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
 
         # load and reshape training data
+        # 'series_id' and 'value' should be set by metadata
+
         inputs = inputs.value
         n_ts = len(inputs['0'].series_id.unique())
         ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
@@ -146,6 +148,8 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         labels = pandas.DataFrame(self._kmeans.predict(input_vals))
         # maybe change d3mIndex key here to be programatically generated 
         out_df_sloth = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), labels], axis = 1)
+        # get column names from metadata
+        out_df_sloth.columns = ['d3mIndex', 'label']
         sloth_df = d3m_DataFrame(out_df_sloth)
         
         # first column ('d3mIndex')
@@ -176,7 +180,7 @@ if __name__ == '__main__':
     storc_client = Storc(hyperparams = hyperparams_class.defaults().replace({'algorithm':'TimeSeriesKMeans','nclusters':4}))
     storc_client.set_training_data(inputs = input_dataset, outputs = None)
     storc_client.fit()
-    test_dataset = container.Dataset.load('file:///seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
+    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
     results = storc_client.produce(inputs = test_dataset)
     print(results.value)
     

@@ -124,6 +124,8 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         # add metadata to output
         labels = pandas.DataFrame(labels)
         out_df= pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), labels], axis = 1)
+        # get column names from metadata
+        out_df.columns = ['d3mIndex', 'label']
         hdbscan_df = d3m_DataFrame(out_df)
         
         # first column ('d3mIndex')

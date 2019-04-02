@@ -151,6 +151,8 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         classes = pandas.DataFrame(self._knn.predict(input_vals))
         output_df = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), classes], axis = 1)
+        # get column names from metadata
+        output_df.columns = ['d3mIndex', 'label']
         knn_df = d3m_DataFrame(output_df)
 
         # first column ('d3mIndex')
