@@ -207,7 +207,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # filter forecast according to interval, resahpe according to filter_name
         if self.hyperparams['interval']:
             future_forecasts = [future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:] for future_forecast in future_forecasts]
-        future_forecasts = [future_forecast.values.reshape((-1,self._target_length), order='F')) for future_forecast in future_forecasts]
+        future_forecasts = [future_forecast.values.reshape((-1,self._target_length), order='F') for future_forecast in future_forecasts]
         future_forecast = pandas.DataFrame(future_forecasts)
 
         # select desired columns to return
