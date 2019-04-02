@@ -117,6 +117,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         values = np.diff(values,axis=0)
 
         var_model = vector_ar(values, dates = self._X_train.index)
+        print(self.hyperparams.keys())
         self._var = var_model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
         return CallResult(None)
 
@@ -254,7 +255,7 @@ if __name__ == '__main__':
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'filter_name':'Company','n_periods':52, 'interval':26}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'filter_name':'Company','n_periods':52, 'interval':26, 'max_lags':15}))
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
