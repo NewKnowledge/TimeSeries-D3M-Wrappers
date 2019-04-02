@@ -258,14 +258,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 if __name__ == '__main__':
     
     input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TRAIN/dataset_TRAIN/datasetDoc.json')
-
-    # filter dataset by year - (add recursively over every year)
-    hp_class = dataset_regex_filter.RegexFilterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    filter_client = dataset_regex_filter.RegexFilterPrimitive(hyperparams = hp_class.defaults().replace({"resource_id":"learningData", "column":2, "regex":"2013"}))
-    vals = filter_client.produce(inputs = input_dataset)
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-    df = d3m_DataFrame(ds2df_client.produce(inputs = filter_client.produce(inputs = input_dataset).value).value)
+    df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
@@ -273,6 +268,6 @@ if __name__ == '__main__':
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
-    results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = filter_client.produce(inputs = test_dataset).value).value))
+    results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
     
