@@ -102,7 +102,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         self._params = {}
         self._target_length = None
-        self._X_train = None 
+        self._X_train = None
+        self._values = None 
         self._var = None
         self._final_logs = None
 
@@ -112,11 +113,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
         
         # log transformation for standardization, difference, drop NAs
-        values = np.log(self._X_train.values)
-        self._final_logs = values[-1:,]
-        values = np.diff(values,axis=0)
+        self._values = np.log(self._X_train.values)
+        self._final_logs = self._values[-1:,]
+        self._values = np.diff(self._values,axis=0)
 
-        var_model = vector_ar(values, dates = self._X_train.index)
+        var_model = vector_ar(self._values, dates = self._X_train.index)
         self._var = var_model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
         return CallResult(None)
 
@@ -185,7 +186,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR
-        future_forecast = self._var.forecast(self._X_train.values[-self._var.k_ar], self.hyperparams['n_periods'])
+        future_forecast = self._var.forecast(self._values[-self._var.k_ar], self.hyperparams['n_periods'])
         
         # undo differencing transformations 
         future_forecast = pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + self._final_logs))
