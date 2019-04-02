@@ -4,7 +4,7 @@ import numpy as np
 import pandas
 import typing
 
-from statsmodels.tsa.api import VAR
+from statsmodels.tsa.api import VAR as var
 import statsmodels.api as sm
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
@@ -116,7 +116,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._final_logs = values[-1:,]
         values = np.diff(values,axis=0)
 
-        var_model = VAR(values, dates = self._X_train.index)
+        var_model = var(values, dates = self._X_train.index)
         self._var = var_model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
         return CallResult(None)
 
