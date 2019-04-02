@@ -117,7 +117,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         values = np.diff(values,axis=0)
 
         var_model = vector_ar(values, dates = self._X_train.index)
-        print(self.hyperparams.keys())
         self._var = var_model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
         return CallResult(None)
 
@@ -259,6 +258,6 @@ if __name__ == '__main__':
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
-    results = var.produce(inputs = test_dataset)
+    results = var.produce(inputs = ds2df_client.produce(inputs = test_dataset).value)
     print(results.value)
     
