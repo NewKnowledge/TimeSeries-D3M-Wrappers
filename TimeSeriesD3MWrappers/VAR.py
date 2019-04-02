@@ -156,7 +156,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             filter_dfs = [inputs]
         min_date = min(inputs.iloc[:,time_index])
         max_date = max(inputs.iloc[:,time_index])
-        reind = [df[1].drop(df[1].columns[cat + key + times], axis = 1, inplace = True).reindex(pandas.date_range(min_date, max_date)) for df in filter_dfs]
+        print(filter_dfs[0][1].drop(filter_dfs[0][1].columns[cat + key + times], axis = 1))
+        reind = [df[1].drop(df[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min_date, max_date)) for df in filter_dfs]
         interpolated = [df.astype(float).interpolate(method='time', limit_direction = 'both') for df in reind]
         self._target_length = interpolated[0].shape[1]
         vals = pandas.concat(interpolated, axis=1)
