@@ -182,7 +182,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # add metadata to output
         # take d3m index from input test set
         index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-        output_df = pandas.DataFrame(inputs.iloc[:, index[0]].values)
+        output_df = pandas.DataFrame(inputs.value.iloc[:, index[0]].values)
         output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR
