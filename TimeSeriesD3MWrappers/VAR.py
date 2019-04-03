@@ -230,11 +230,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # filter forecast according to interval, resahpe according to filter_name
         if self.hyperparams['interval']:
             future_forecasts = [future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:] for future_forecast in future_forecasts]
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        future_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in future_forecasts]
         for f in future_forecasts:
             print(f)
             print(f.shape)
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        future_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in future_forecasts]
+
         future_forecast = pandas.DataFrame(np.concatenate(future_forecasts))
 
         # select desired columns to return
