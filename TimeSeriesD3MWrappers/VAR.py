@@ -215,12 +215,15 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # produce future foecast using VAR
         future_forecasts = []
-        for var, vals in zip(self._vars, self._values):
+        for var, vals, original in zip(self._vars, self._values, self._X_train):
             if vals.shape[1] > 1:
-                init = var.k_ar if var.k_ar > 0 else 1
+                print(vals)
+                print(original.index)
+                var = vector_ar(vals, dates = original.index)
+                print(var.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic'))
                 print(var.coefs)
                 print(var.params)
-                print(var.forecast(vals[-init:], self.hyperparams['n_periods']))
+                print(var.forecast(vals[-var.k_ar:], self.hyperparams['n_periods']))
                 future_forecasts.append(var.forecast(vals[-init:], self.hyperparams['n_periods']))
             else:
                 future_forecasts.append(var.predict(vals.shape[0] + 1, vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True))
