@@ -55,11 +55,11 @@ class Hyperparams(hyperparams.Hyperparams):
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='if multiple datetime indices exist, this HP specifies which to apply to training data')
     arma_p = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = 1,
+        default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='The p order of the ARMA model in case some time series are univariate')
     arma_q = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = 1,
+        default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='The q order of the ARMA model in case some time series are univariate')
     pass
