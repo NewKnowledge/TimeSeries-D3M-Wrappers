@@ -224,10 +224,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
         
         # undo differencing transformations 
-        print(np.exp(future_forecasts[0].cumsum(axis=0) + self._final_logs[0]).shape)
-        print(np.exp(future_forecasts[-1].cumsum(axis=0) + self._final_logs[-1]).shape)
-        future_forecasts = [future_forecast.T if future_forecast.shape[0] is 1 else future_forecast for future_forecast in future_forecasts]
-        future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
+        future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
+            else np.exp(future_forecast.cumsum(axis=0) + final_logs) for uture_forecast, final_logs in zip(future_forecasts, self._final_logs)]
+        future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
         print(future_forecasts)
         print()
         print(len(future_forecasts))
