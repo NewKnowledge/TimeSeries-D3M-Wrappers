@@ -113,7 +113,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
         self._params = {}
-        self._target_lengths = None
         self._X_train = None
         self._values = None 
         self._fits = None
@@ -227,21 +226,15 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
             else np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
-        print(future_forecasts)
-        print()
-        print(len(future_forecasts))
-        print()
+
         # filter forecast according to interval, resahpe according to filter_name
         if self.hyperparams['interval']:
             future_forecasts = [future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:] for future_forecast in future_forecasts]
-        print(future_forecasts)
-        print()
-        future_forecasts = [future_forecast.values.reshape((-1,targets), order='F') for future_forecast, targets in zip(future_forecasts, self._target_lengths)]
-        print(future_forecasts)
-        future_forecast = pandas.DataFrame(future_forecasts)
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        future_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in future_forecasts]
+        future_forecast = pandas.DataFrame(np.concatenate(future_forecasts))
 
         # select desired columns to return
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
         future_forecast.columns = list(set(self._X_train[0]))
         future_forecast = future_forecast[colnames]
