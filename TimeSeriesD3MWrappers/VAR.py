@@ -113,7 +113,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
         self._params = {}
-        self._target_length = None
+        self._target_lengths = None
         self._X_train = None
         self._values = None 
         self._fits = None
@@ -186,7 +186,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].iloc[:,time_index]), 
                 max(year[0][1].iloc[:,time_index]))) for company in year] for year in company_dfs]
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
-        self._target_length = interpolated[0][0].shape[1]
+        self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
         self._X_train = vals
 
@@ -224,13 +224,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
         
         # undo differencing transformations 
-        future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) if len(final_logs) > 1 \
-            else pandas.DataFrame(np.exp(future_forecast)) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
+        future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
 
         # filter forecast according to interval, resahpe according to filter_name
         if self.hyperparams['interval']:
             future_forecasts = [future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:] for future_forecast in future_forecasts]
-        future_forecasts = [future_forecast.values.reshape((-1,self._target_length), order='F') for future_forecast in future_forecasts]
+        print(future_forecasts)
+        future_forecasts = [future_forecast.values.reshape((-1,targets), order='F') for future_forecast, targets in zip(future_forecasts, self._target_lengths)]
+        print(future_forecasts)
         future_forecast = pandas.DataFrame(future_forecasts)
 
         # select desired columns to return
