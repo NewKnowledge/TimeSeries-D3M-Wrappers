@@ -219,11 +219,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             if vals.shape[1] > 1:
                 print(vals)
                 print(original.index)
-                var = vector_ar(vals, dates = original.index)
-                print(var.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic'))
-                print(var.coefs)
-                print(var.params)
-                print(var.forecast(vals[-var.k_ar:], self.hyperparams['n_periods']))
+                model = vector_ar(vals, dates = original.index)
+                v = model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic'))
+                print(v.coefs)
+                print(v.params)
+                print(v.forecast(vals[-var.k_ar:], self.hyperparams['n_periods']))
                 future_forecasts.append(var.forecast(vals[-init:], self.hyperparams['n_periods']))
             else:
                 future_forecasts.append(var.predict(vals.shape[0] + 1, vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True))
