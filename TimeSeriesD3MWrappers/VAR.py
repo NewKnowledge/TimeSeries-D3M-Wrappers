@@ -214,10 +214,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR
-        print(self._values[0])
-        print(self._values[0].shape)
-        future_forecasts = [var.forecast(vals[var.k_ar:], self.hyperparams['n_periods']) if len(vals) > 1 \
-            else var.predict(len(vals) + 1, len(vals) + 1 + self.hyperparams['n_periods'], dynamic = True) for var, vals in zip(self._vars, self._values)]
+        future_forecasts = [var.forecast(vals[var.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 \
+            else var.predict(vals.shape[0] + 1, vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True) for var, vals in zip(self._vars, self._values)]
         
         # undo differencing transformations 
         future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) if len(final_logs) > 1 \
