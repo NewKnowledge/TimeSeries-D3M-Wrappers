@@ -36,6 +36,12 @@ class Hyperparams(hyperparams.Hyperparams):
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='interval with which to sample future predictions')
+    datetime_interval_exception = hyperparams.Hyperparameter[typing.Union[str, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='to handle different prediction intervals (stock market dataset). \
+            If this HP is set, primitive will just make next forecast for this datetime value \
+            (not multiple forecasts at multiple intervals')
     max_lags = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
@@ -219,7 +225,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         output_df = pandas.DataFrame(inputs.iloc[:, index[0]].values)
         output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
-        # produce future foecast using VAR
+        # produce future foecast using VAR / ARMA
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
         
         # undo differencing transformations 
@@ -228,11 +234,19 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
 
         # filter forecast according to interval, resahpe according to filter_name
-        if self.hyperparams['interval']:
+        final_forecasts = []
+        index = None 
+        if self.hyperparams['datetime_interval_exception']:
+            index = np.where(np.sort(inputs.columns[self.hyperparams['datetime_filter']].unique()) == self.hyperparams['datetime_interval_exception'])[0][0]
+        for future_forecast, ind in zip(future_forecasts, len(future_forecasts)):
+            if ind is index:
+                final_forecasts.append(future_forecast.iloc[0:1,:])
+            elif self.hyperparams['interval']:
+                final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
+            else:
+                final_forecasts.append(future_forecast)
+
             future_forecasts = [future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:] for future_forecast in future_forecasts]
-        for f in future_forecasts:
-            print(f)
-            print(f.shape)
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         future_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in future_forecasts]
 
@@ -290,7 +304,7 @@ if __name__ == '__main__':
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'filter_index':1, 'datetime_filter': 2, 'n_periods':52, 'interval':26, 'max_lags':15}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'filter_index':1, 'datetime_filter': 2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
