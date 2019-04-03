@@ -222,10 +222,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # produce future foecast using VAR
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
-        
+        print(future_forecasts)
+        print(len(future_forecasts))
+        print()
         # undo differencing transformations 
         future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
-
+        print(future_forecasts)
+        print()
         # filter forecast according to interval, resahpe according to filter_name
         if self.hyperparams['interval']:
             future_forecasts = [future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:] for future_forecast in future_forecasts]
