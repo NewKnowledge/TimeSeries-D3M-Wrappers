@@ -250,7 +250,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 final_forecasts.append(future_forecast)
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
-
         future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
 
         # select desired columns to return
@@ -269,7 +268,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
         #('predictions')
-        for index, name in zip(range(len(colnames)), colnames):
+        for index, name in zip(range(1, len(colnames)), colnames):
             col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
             col_dict['structural_type'] = type("1")
             col_dict['name'] = name
