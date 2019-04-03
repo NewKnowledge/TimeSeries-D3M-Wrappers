@@ -6,6 +6,7 @@ import typing
 
 from statsmodels.tsa.api import VAR as vector_ar
 import statsmodels.api as sm
+from statsmodels.tsa.arima_model import ARMA
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
@@ -53,6 +54,14 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='if multiple datetime indices exist, this HP specifies which to apply to training data')
+    arma_p = hyperparams.Hyperparameter[typing.Union[int, None]](
+        default = 2,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
+        description='The p order of the ARMA model in case some time series are univariate')
+    arma_q = hyperparams.Hyperparameter[typing.Union[int, None]](
+        default = 2,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
+        description='The q order of the ARMA model in case some time series are univariate')
     pass
 
 class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
@@ -120,8 +129,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._final_logs = [year[-1:,] for year in self._values]
         self._values = [np.diff(year,axis=0) for year in self._values]
 
-        var_models = [vector_ar(vals, dates = original.index) for vals, original in zip(self._values, self._X_train)]
-        self._vars = [var_model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic') for var_model in var_models]
+        # use ARMA model in case some data only has 1 variable
+        ## TODO - calculate these params automatically / hyperparams
+        arma_p = self.hyperparams['arma_p']
+        arma_q = self.hyperparams['arma_q']
+
+        models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
+        self._vars = [model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic') if vals.shape[1] > 1 else model.fit() for vals, model in zip(self._values, models)]
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -200,10 +214,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR
-        future_forecasts = [var.forecast(vals[var.k_ar:], self.hyperparams['n_periods']) for var, vals in zip(self._vars, self._values)]
+        future_forecasts = [var.forecast(vals[var.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 \
+            else var.predict(vals.shape[0] + 1, vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True) for var, vals in zip(self._vars, self._values)]
         
         # undo differencing transformations 
-        future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
+        future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) if len(final_logs) > 1 \
+            else pandas.DataFrame(np.exp(future_forecast)) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
 
         # filter forecast according to interval, resahpe according to filter_name
         if self.hyperparams['interval']:
