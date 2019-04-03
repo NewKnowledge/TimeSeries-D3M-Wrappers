@@ -240,7 +240,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         final_forecasts = []
         index = None 
         if self.hyperparams['datetime_interval_exception']:
-            index = np.where(np.sort(inputs.columns[self.hyperparams['datetime_filter']].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
+            index = np.where(np.sort(inputs[inputs.columns[self.hyperparams['datetime_filter']]].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
         for future_forecast, ind in zip(future_forecasts, len(future_forecasts)):
             if ind is index:
                 final_forecasts.append(future_forecast.iloc[0:1,:])
