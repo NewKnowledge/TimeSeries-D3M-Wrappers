@@ -26,7 +26,7 @@ class Params(params.Params):
 
 # default values chosen for 56_sunspots 'sunspot.year' seed dataset
 class Hyperparams(hyperparams.Hyperparams):
-    index = hyperparams.Hyperparamter[typing.Union[int, None]](
+    index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of which suggestedTarget to predict')
