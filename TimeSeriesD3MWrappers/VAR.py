@@ -219,7 +219,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             if vals.shape[1] > 1:
                 print(var.k_ar)
                 print(vals[var.k_ar:])
-                print(var.forecast(vals[var.k_ar:], self.hyperparams['n_periods'])
+                print(var.forecast(vals[var.k_ar:], self.hyperparams['n_periods']))
         future_forecasts = [var.forecast(vals[var.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 \
             else var.predict(vals.shape[0] + 1, vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True) for var, vals in zip(self._vars, self._values)]
         
