@@ -4,7 +4,7 @@ import numpy as np
 import pandas
 import typing
 
-from statsmodels.tsa.api import VAR as vector_ar
+from statsmodels.tsa.vector_ar.var_model import VAR as vector_ar
 import statsmodels.api as sm
 from statsmodels.tsa.arima_model import ARMA
 
