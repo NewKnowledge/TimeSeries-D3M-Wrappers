@@ -238,15 +238,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # filter forecast according to interval, resahpe according to filter_name
         final_forecasts = []
-        index = None 
+        idx = None 
         if self.hyperparams['datetime_interval_exception']:
-            index = np.where(np.sort(inputs[inputs.columns[self.hyperparams['datetime_filter']]].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
+            idx = np.where(np.sort(inputs[inputs.columns[self.hyperparams['datetime_filter']]].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
         for future_forecast, ind in zip(future_forecasts, range(len(future_forecasts))):
-            if ind == index:
-                print(ind)
-                print(final_forecasts)
+            if ind == idx:
                 final_forecasts.append(future_forecast.iloc[0:1,:])
-                print(final_forecasts)
             elif self.hyperparams['interval']:
                 final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
             else:
