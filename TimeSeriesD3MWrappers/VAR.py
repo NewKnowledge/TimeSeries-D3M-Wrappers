@@ -241,16 +241,16 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         index = None 
         if self.hyperparams['datetime_interval_exception']:
             index = np.where(np.sort(inputs[inputs.columns[self.hyperparams['datetime_filter']]].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
-        print(index)
         for future_forecast, ind in zip(future_forecasts, range(len(future_forecasts))):
-            print(ind)
             if ind is index:
+                print(ind)
+                print(final_forecasts)
                 final_forecasts.append(future_forecast.iloc[0:1,:])
+                print(final_forecasts)
             elif self.hyperparams['interval']:
                 final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
             else:
                 final_forecasts.append(future_forecast)
-        print(final_forecasts)
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
 
