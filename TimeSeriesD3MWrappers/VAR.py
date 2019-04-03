@@ -220,10 +220,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             if vals.shape[1] > 1:
                 lag = fit.k_ar if fit.k_ar > 1 else 1
                 print(vals.shape)
-                print(model.predict(fit.params, start = vals.shape[0] + 1, end = vals.shape[0] + 1 + self.hyperparams['n_periods'], lags = lag))
-                future_forecasts.append(model.predict(fit.params, start = vals.shape[0] + 1, end = vals.shape[0] + 1 + self.hyperparams['n_periods'], lags = lag))
+                print(model.predict(fit.params, start = None, end = self.hyperparams['n_periods'], lags = lag))
+                future_forecasts.append(model.predict(fit.params, start = None, end = self.hyperparams['n_periods'], lags = lag))
             else:
-                future_forecasts.append(model.predict(fit.params, start = vals.shape[0] + 1, end = vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True))
+                future_forecasts.append(model.predict(fit.params, start = None, end = self.hyperparams['n_periods'], dynamic = True))
         
         # undo differencing transformations 
         future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) if len(final_logs) > 1 \
