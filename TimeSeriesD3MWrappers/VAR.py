@@ -116,7 +116,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._target_length = None
         self._X_train = None
         self._values = None 
-        self._vars = None
+        self._models = None
+        self._fits = None
         self._final_logs = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
@@ -134,8 +135,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         arma_p = self.hyperparams['arma_p']
         arma_q = self.hyperparams['arma_q']
 
-        models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
-        self._vars = [model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic') if vals.shape[1] > 1 else model.fit(disp = -1) for vals, model in zip(self._values, models)]
+        self._models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
+        self._fits = [model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic') if vals.shape[1] > 1 else model.fit(disp = -1) for vals, model in zip(self._values, self._models)]
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -215,18 +216,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # produce future foecast using VAR
         future_forecasts = []
-        for var, vals, original in zip(self._vars, self._values, self._X_train):
+        for model, fit, vals in zip(self._models, self._fits, self._values):
             if vals.shape[1] > 1:
-                print(vals)
-                print(original.index)
-                model = vector_ar(vals, dates = original.index)
-                v = model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
-                print(v.coefs)
-                print(v.params)
-                print(v.forecast(vals[-var.k_ar:], self.hyperparams['n_periods']))
-                future_forecasts.append(var.forecast(vals[-init:], self.hyperparams['n_periods']))
+                lag = fit.k_ar if fit.k_ar > 1 else 1
+                print(vals.shape)
+                print(model.predict(fit.params, start = vals.shape[0] + 1, end = vals.shape[0] + 1 + self.hyperparams['n_periods'], lags = lag))
+                future_forecasts.append(model.predict(fit.params, start = vals.shape[0] + 1, end = vals.shape[0] + 1 + self.hyperparams['n_periods'], lags = lag))
             else:
-                future_forecasts.append(var.predict(vals.shape[0] + 1, vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True))
+                future_forecasts.append(model.predict(fit.params, start = vals.shape[0] + 1, end = vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True))
         
         # undo differencing transformations 
         future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) if len(final_logs) > 1 \
