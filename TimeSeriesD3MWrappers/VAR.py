@@ -220,7 +220,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 print(vals)
                 print(original.index)
                 model = vector_ar(vals, dates = original.index)
-                v = model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic'))
+                v = model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic')
                 print(v.coefs)
                 print(v.params)
                 print(v.forecast(vals[-var.k_ar:], self.hyperparams['n_periods']))
