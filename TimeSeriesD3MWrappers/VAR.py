@@ -51,7 +51,8 @@ class Hyperparams(hyperparams.Hyperparams):
     datetime_filter = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='index of column in input dataset that contain unique identifiers of time series that have different datetime indices')
+        description='index of column in input dataset that contain unique identifiers of \
+            time series that have different datetime indices')
     filter_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
@@ -139,7 +140,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         arma_p = self.hyperparams['arma_p']
         arma_q = self.hyperparams['arma_q']
 
-        models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
+        models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 \
+            else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
         self._fits = []
         for vals, model in zip(self._values, models):
             if vals.shape[1] > 1:
@@ -226,7 +228,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR / ARMA
-        future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
+        future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 \
+            else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
         
         # undo differencing transformations 
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
@@ -237,7 +240,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         final_forecasts = []
         index = None 
         if self.hyperparams['datetime_interval_exception']:
-            index = np.where(np.sort(inputs.columns[self.hyperparams['datetime_filter']].unique()) == self.hyperparams['datetime_interval_exception'])[0][0]
+            index = np.where(np.sort(inputs.columns[self.hyperparams['datetime_filter']].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
         for future_forecast, ind in zip(future_forecasts, len(future_forecasts)):
             if ind is index:
                 final_forecasts.append(future_forecast.iloc[0:1,:])
@@ -245,12 +248,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
             else:
                 final_forecasts.append(future_forecast)
-
-            future_forecasts = [future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:] for future_forecast in future_forecasts]
+        print(final_forecasts)
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        future_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in future_forecasts]
+        final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
 
-        future_forecast = pandas.DataFrame(np.concatenate(future_forecasts))
+        future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
 
         # select desired columns to return
         colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
@@ -272,7 +274,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
             col_dict['structural_type'] = type("1")
             col_dict['name'] = name
-            col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
+            col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', \
+                'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
             var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index), col_dict)
 
         return CallResult(var_df)
