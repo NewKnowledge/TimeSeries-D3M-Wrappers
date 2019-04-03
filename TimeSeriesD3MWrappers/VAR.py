@@ -4,7 +4,7 @@ import numpy as np
 import pandas
 import typing
 
-from statsmodels.tsa.vector_ar.var_model import VAR as vector_ar
+from statsmodels.tsa.api import VAR as vector_ar
 import statsmodels.api as sm
 from statsmodels.tsa.arima_model import ARMA
 
@@ -218,9 +218,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             print(vals.shape)
             if vals.shape[1] > 1:
                 print(var.k_ar)
-                print(vals[var.k_ar:])
-                print(var.forecast(vals[var.k_ar:], self.hyperparams['n_periods']))
-        future_forecasts = [var.forecast(vals[var.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 \
+                print(vals[-var.k_ar:])
+                print(var.forecast(vals[-var.k_ar:], self.hyperparams['n_periods']))
+        future_forecasts = [var.forecast(vals[-var.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 \
             else var.predict(vals.shape[0] + 1, vals.shape[0] + 1 + self.hyperparams['n_periods'], dynamic = True) for var, vals in zip(self._vars, self._values)]
         
         # undo differencing transformations 
