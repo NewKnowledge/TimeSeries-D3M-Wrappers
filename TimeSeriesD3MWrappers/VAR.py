@@ -225,7 +225,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # undo differencing transformations 
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
-            else np.exp(future_forecast.cumsum(axis=0) + final_logs) for uture_forecast, final_logs in zip(future_forecasts, self._final_logs)]
+            else np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
         print(future_forecasts)
         print()
