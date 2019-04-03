@@ -39,6 +39,9 @@ class Hyperparams(hyperparams.Hyperparams):
     min_samples = hyperparams.UniformInt(lower=1, upper=sys.maxsize, default = 5, semantic_types = 
         ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'The number of samples in a neighbourhood for a point to be considered a core point.')   
+    long_format = hyperparams.UniformBool(default = False, semantic_types = [
+       'https://metadata.datadrivendiscovery.org/types/ControlParameter'],
+       description="whether the input dataset is already formatted in long format or not")
     pass
 
 class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
@@ -102,10 +105,15 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
             The output is a dataframe containing a single column where each entry is the associated series' cluster number.
         """
 
-        # temporary (until Uncharted adds conversion primitive to repo)
-        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+        if not self.hyperparams['long_format']:
+            # temporary (until Uncharted adds conversion primitive to repo)
+            hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+        else:
+            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+            inputs = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
 
         # parse values from output of time series formatter
         inputs = inputs.value

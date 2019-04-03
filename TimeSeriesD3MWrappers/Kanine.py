@@ -30,6 +30,9 @@ class Hyperparams(hyperparams.Hyperparams):
     n_neighbors = hyperparams.UniformInt(lower = 0, upper = sys.maxsize, default = 5, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description='number of neighbors on which to make classification decision')
+    long_format = hyperparams.UniformBool(default = False, semantic_types = [
+       'https://metadata.datadrivendiscovery.org/types/ControlParameter'],
+       description="whether the input dataset is already formatted in long format or not")
     pass
 
 class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
@@ -111,11 +114,15 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         outputs: numpy ndarray of size (number_time_series,) containing classes of training time series
         '''
-
-        # temporary (until Uncharted adds conversion primitive to repo)
-        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+        if not self.hyperparams['long_format']:
+            # temporary (until Uncharted adds conversion primitive to repo)
+            hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+        else:
+            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+            inputs = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
 
         # load and reshape training data
         inputs = inputs.value

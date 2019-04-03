@@ -32,7 +32,10 @@ class Hyperparams(hyperparams.Hyperparams):
         description = 'type of clustering algorithm to use')
     nclusters = hyperparams.UniformInt(lower=1, upper=sys.maxsize, default=3, semantic_types=
         ['https://metadata.datadrivendiscovery.org/types/TuningParameter'], description = 'number of clusters \
-        to user in kernel kmeans algorithm')   
+        to user in kernel kmeans algorithm')
+    long_format = hyperparams.UniformBool(default = False, semantic_types = [
+       'https://metadata.datadrivendiscovery.org/types/ControlParameter'],
+       description="whether the input dataset is already formatted in long format or not")
     pass
 
 class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
@@ -109,14 +112,18 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
         
         '''
-        # temporary (until Uncharted adds conversion primitive to repo)
-        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+        if not self.hyperparams['long_format']:
+            # temporary (until Uncharted adds conversion primitive to repo)
+            hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+        else:
+            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+            inputs = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
 
         # load and reshape training data
         # 'series_id' and 'value' should be set by metadata
-
         inputs = inputs.value
         n_ts = len(inputs['0'].series_id.unique())
         ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
