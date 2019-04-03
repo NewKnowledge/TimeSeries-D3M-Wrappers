@@ -236,7 +236,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # select desired columns to return
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
-        future_forecast.columns = list(set(list(self._X_train)))
+        future_forecast.columns = list(set(self._X_train[0]))
         future_forecast = future_forecast[colnames]
         
         output_df = pandas.concat([output_df, future_forecast], axis=1)
