@@ -222,10 +222,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # produce future foecast using VAR
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
-        for fit, vals in zip(self._fits, self._values):
-            if vals.shape[1] > 1:
-                print(vals.shape)
-                print(fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']))
         
         # undo differencing transformations 
         future_forecasts = [pandas.DataFrame(np.exp(future_forecast.cumsum(axis=0) + final_logs)) if len(final_logs) > 1 \
@@ -240,7 +236,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # select desired columns to return
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
-        future_forecast.columns = list(set(self._X_train))
+        future_forecast.columns = list(set(list(self._X_train)))
         future_forecast = future_forecast[colnames]
         
         output_df = pandas.concat([output_df, future_forecast], axis=1)
