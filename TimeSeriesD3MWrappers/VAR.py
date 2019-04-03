@@ -55,11 +55,11 @@ class Hyperparams(hyperparams.Hyperparams):
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='if multiple datetime indices exist, this HP specifies which to apply to training data')
     arma_p = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = 2,
+        default = 1,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='The p order of the ARMA model in case some time series are univariate')
     arma_q = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = 2,
+        default = 1,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='The q order of the ARMA model in case some time series are univariate')
     pass
@@ -135,7 +135,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         arma_q = self.hyperparams['arma_q']
 
         models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
-        self._vars = [model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic') if vals.shape[1] > 1 else model.fit() for vals, model in zip(self._values, models)]
+        self._vars = [model.fit(maxlags = self.hyperparams['max_lags'], ic = 'aic') if vals.shape[1] > 1 else model.fit(disp = -1) for vals, model in zip(self._values, models)]
         return CallResult(None)
 
     def get_params(self) -> Params:
