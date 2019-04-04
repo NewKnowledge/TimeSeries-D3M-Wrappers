@@ -1,1 +1,3 @@
 sloth_predictions.csv
+d3m_env/*
+.vscode/*
