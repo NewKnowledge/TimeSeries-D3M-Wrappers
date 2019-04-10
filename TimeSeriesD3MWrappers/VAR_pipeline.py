@@ -29,4 +29,5 @@ pipeline_description.add_step(step_1)
 pipeline_description.add_output(name='output predictions', data_reference='steps.1.produce')
 
 # Output to JSON
-print(pipeline_description.to_json())
+with open('pipeline.json', 'w') as outfile:
+    outfile.write(pipeline_description.to_json())
