@@ -6,7 +6,7 @@ setup(name='TimeSeriesD3MWrappers',
     packages=['TimeSeriesD3MWrappers'],
     install_requires=["typing",
                       "numpy",
-                      "Sloth @ git+https://github.com/NewKnowledge/sloth@cd26826498da8675b591d72923ab8a124df0c255#egg=Sloth-2.0.6",
+                      "Sloth @ git+https://github.com/NewKnowledge/sloth@3bc3a26a4f8a1244a49c329b1f7dcb42e9d49cc9#egg=Sloth-2.0.6",
                       "DistilTimeSeriesLoader @ git+https://github.com/uncharted-distil/distil-timeseries-loader@b781b140ec1328939e7bf6005251b2145d9ca20a#egg=DistilTimeSeriesLoader-0.1.2",
                       ],
     entry_points = {
