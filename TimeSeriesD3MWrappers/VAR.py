@@ -73,7 +73,10 @@ class Hyperparams(hyperparams.Hyperparams):
 
 class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
-        Produce primitive's best guess for the cluster number of each series.
+        Produce primitive's prediction for future time series data. The output is a data frame containing the d3m index and a 
+        forecast for each of the 'n_periods' future time periods, modified if desired by the 'interval' HP. The default is a 
+        future forecast for each of the selected input variables. This can be modified to just one output variable with 
+        the associated HP
     """
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".
@@ -209,7 +212,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         Returns
         ----------
         Outputs
-            The output is a data frame containing the d3m index and a forecast for each of the 'n_periods' future time periods
+            The output is a data frame containing the d3m index and a forecast for each of the 'n_periods' future time periods, 
+            modified if desired by the 'interval' HP
             The default is a future forecast for each of the selected input variables. This can be modified to just one output 
                 variable with the associated HP
         """
@@ -281,7 +285,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     '''
     def produce_weights(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
-        Produce primitive's prediction for future time series data
+        Produce correlation coefficients (weights) for each of the terms used in the regression model
 
         Parameters
         ----------
@@ -290,9 +294,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         Returns
         ----------
         Outputs
-            The output is a data frame containing the d3m index and a forecast for each of the 'n_periods' future time periods
-            The default is a future forecast for each of the selected input variables. This can be modified to just one output 
-                variable with the associated HP
+            The output is a data frame containing columns for each of the terms used in the regression model. Each row contains the 
+            correlation coefficients for each term in the regression model. If there are multiple unique timeseries indices in the 
+            dataset there can be multiple rows in this output dataset. Terms that aren't included in a specific timeseries index will 
+            have a value of NA in the associated matrix entry.
         """
     '''
 

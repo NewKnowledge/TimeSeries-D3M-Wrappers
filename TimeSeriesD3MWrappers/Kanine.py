@@ -14,7 +14,7 @@ from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
-from timeseriesloader.timeseries_formatter import TimeSeriesFormatterPrimitive
+from .timeseries_formatter import TimeSeriesFormatterPrimitive
 
 __author__ = 'Distil'
 __version__ = '1.0.2'
@@ -115,21 +115,20 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         outputs: numpy ndarray of size (number_time_series,) containing classes of training time series
         '''
         if not self.hyperparams['long_format']:
-            # temporary (until Uncharted adds conversion primitive to repo)
             hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs).value['0']
         else:
             hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-            inputs = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
+            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)
 
         # load and reshape training data
-        inputs = inputs.value
-        n_ts = len(inputs['0'].series_id.unique())
-        ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        self._X_train = np.array(inputs['0'].value).reshape(n_ts, ts_sz, 1)
-        self._y_train = np.array(inputs['0'].label.iloc[::ts_sz]).reshape(-1,)
+        # 'series_id' and 'value' should be set by metadata
+        n_ts = inputs.d3mIndex.unique()
+        ts_sz = int(inputs.shape[0] / n_ts)
+        self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
+        self._y_train = np.array(inputs.label.iloc[::ts_sz]).reshape(-1,)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -146,15 +145,19 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
 
         # temporary (until Uncharted adds conversion primitive to repo)
-        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-        inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs)
+        if not self.hyperparams['long_format']:
+            hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs).value['0']
+        else:
+            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)
 
         # parse values from output of time series formatter
-        inputs = inputs.value
-        n_ts = len(inputs['0'].series_id.unique())
-        ts_sz = int(inputs['0'].value.shape[0] / len(inputs['0'].series_id.unique()))
-        input_vals = np.array(inputs['0'].value).reshape(n_ts, ts_sz)
+        n_ts = inputs.d3mIndex.unique()
+        ts_sz = int(inputs.shape[0] / n_ts)
+        input_vals = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
 
         classes = pandas.DataFrame(self._knn.predict(input_vals))
         output_df = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), classes], axis = 1)
