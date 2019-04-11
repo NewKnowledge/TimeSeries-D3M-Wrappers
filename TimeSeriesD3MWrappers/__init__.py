@@ -1,4 +1,3 @@
-'''
 from TimeSeriesD3MWrappers.Parrot import Parrot
 from TimeSeriesD3MWrappers.Shallot import Shallot
 from TimeSeriesD3MWrappers.Storc import Storc
@@ -16,4 +15,3 @@ __all__ = [
            "Hdbscan",
            "timeseries_formatter"
            ]
-'''

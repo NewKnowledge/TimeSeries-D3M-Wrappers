@@ -171,7 +171,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         '''
         # set datetime index
-        times = inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
+        times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
         time_index = times[self.hyperparams['datetime_index']]
         inputs.index = pandas.DatetimeIndex(inputs.iloc[:,time_index])
 
