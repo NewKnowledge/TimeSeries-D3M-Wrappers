@@ -11,7 +11,7 @@ step_0 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series
 step_0.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='inputs.0')
 step_0.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='inputs.0')
 step_0.add_hyperparameter(name='epochs', argument_type= ArgumentType.VALUE, data=10000)
-step_0.add_hyperparameter(name='learning rate', argument_type= ArgumentType.VALUE, data=.001)
+step_0.add_hyperparameter(name='learning_rate', argument_type= ArgumentType.VALUE, data=.001)
 
 step_0.add_output('produce')
 pipeline_description.add_step(step_0)
