@@ -315,5 +315,5 @@ if __name__ == '__main__':
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
     results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    #print(results.value)
-    results.value.to_csv('preds.csv', index=False)
+    print(results.value)
+    #results.value.to_csv('preds.csv', index=False)
