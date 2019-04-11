@@ -15,7 +15,7 @@ from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
-from .timeseries_formatter import TimeSeriesFormatterPrimitive
+from timeseries_formatter import TimeSeriesFormatterPrimitive
 
 __author__ = 'Distil'
 __version__ = '1.0.2'
