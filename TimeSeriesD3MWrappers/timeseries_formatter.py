@@ -144,26 +144,13 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
 
         # generate the long form timeseries data
         base_path = self._get_base_path(inputs.metadata, main_resource_index, file_index)
-        output_data = []
-        timeseries_dataframe = pd.DataFrame()
-        for idx, tRow in inputs[main_resource_index].iterrows():
-            # read the timeseries data
-            csv_path = os.path.join(base_path, tRow[file_index])
-            timeseries_row = pd.read_csv(csv_path)
 
-            # add the timeseries id
-            tRow = tRow.append(pd.Series({'series_id': int(idx)}))
+        csv_paths = [os.path.join(base_path, f) for f in inputs[main_resource_index].iloc[:,file_index]]
+        ts_values = [pd.read_csv(path) for path in csv_paths]
+        for ts, val in zip(ts_values, inputs[main_resource_index].values):
+            ts[list(inputs[main_resource_index])] = pd.DataFrame([list(val)], index = ts.index)
+        timeseries_dataframe = pd.concat(ts_values)
 
-            # combine the timeseries data with the value row
-            output_data.extend([pd.concat([tRow, vRow]) for vIdx, vRow in timeseries_row.iterrows()])
-
-        # add the timeseries index
-        timeseries_dataframe = timeseries_dataframe.append(output_data, ignore_index=True)
-
-        # join the metadata from the 2 data resources
-        timeseries_dataframe = container.DataFrame(timeseries_dataframe)
-
-        # wrap as a D3M container
         #return base.CallResult(container.Dataset({'0': timeseries_dataframe}, metadata))
         return base.CallResult(container.Dataset({'0': timeseries_dataframe}, generate_metadata=True))
 
