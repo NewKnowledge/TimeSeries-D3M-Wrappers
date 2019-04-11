@@ -150,8 +150,7 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
         for ts, val in zip(ts_values, inputs[main_resource_index].values):
             ts[list(inputs[main_resource_index])] = pd.DataFrame([list(val)], index = ts.index)
         timeseries_dataframe = pd.concat(ts_values)
-
-        #return base.CallResult(container.Dataset({'0': timeseries_dataframe}, metadata))
+        timeseries_dataframe = container.DataFrame(timeseries_dataframe)
         return base.CallResult(container.Dataset({'0': timeseries_dataframe}, generate_metadata=True))
 
     def _get_base_path(self,
