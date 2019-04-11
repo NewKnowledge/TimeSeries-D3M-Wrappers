@@ -187,7 +187,7 @@ if __name__ == '__main__':
     # Load data and preprocessing
     input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = Kanine.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams'] 
-    kanine_client = Kanine(hyperparams=hyperparams_class.defaults().replace())
+    kanine_client = Kanine(hyperparams=hyperparams_class.defaults())
     kanine_client.set_training_data(inputs = input_dataset, outputs = None)
     kanine_client.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
