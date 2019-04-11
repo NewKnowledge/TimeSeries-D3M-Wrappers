@@ -146,7 +146,7 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # temporary (until Uncharted adds conversion primitive to repo)
         if not self.hyperparams['long_format']:
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp.produce(inputs = inputs).value['0']
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
             hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
