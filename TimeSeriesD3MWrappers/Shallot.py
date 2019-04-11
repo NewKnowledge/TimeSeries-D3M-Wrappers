@@ -32,6 +32,10 @@ class Hyperparams(hyperparams.Hyperparams):
         upper_inclusive = False, semantic_types = [
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'base shapelet length, expressed as fraction of length of time series')
+    num_shapelets = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.2, 
+        upper_inclusive = False, semantic_types = [
+       'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
+       description = 'number of shapelet lengths, expressed as fraction of length of time series')
     num_shapelet_lengths = hyperparams.UniformInt(lower = 1, upper = 100, default = 2, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of different shapelet lengths')
@@ -106,7 +110,8 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._y_train = None          # training labels
         self._shapelets = Shapelets(self.hyperparams['epochs'], 
             self.hyperparams['shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
-            self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'])  
+            self.hyperparams['num_shapelets'], self.hyperparams['learning_rate'], 
+            self.hyperparams['weight_regularizer'])  
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
