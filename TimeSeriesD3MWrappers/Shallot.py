@@ -147,7 +147,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # load and reshape training data
         # 'series_id' and 'value' should be set by metadata
-        n_ts = inputs.d3mIndex.unique()
+        n_ts = len(inputs.d3mIndex.unique())
         ts_sz = int(inputs.shape[0] / n_ts)
         self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
         self._y_train = np.array(inputs.label.iloc[::ts_sz]).reshape(-1,)
@@ -176,7 +176,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)
 
         # parse values from output of time series formatter
-        n_ts = inputs.d3mIndex.unique()
+        n_ts = len(inputs.d3mIndex.unique())
         ts_sz = int(inputs.shape[0] / n_ts)
         input_vals = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
 
