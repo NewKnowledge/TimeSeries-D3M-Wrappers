@@ -154,7 +154,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # concatenate predictions and d3mIndex
         labels = pandas.DataFrame(self._kmeans.predict(input_vals))
         # maybe change d3mIndex key here to be programatically generated 
-        out_df_sloth = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), labels], axis = 1)
+        out_df_sloth = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), labels], axis = 1)
         # get column names from metadata
         out_df_sloth.columns = ['d3mIndex', 'label']
         sloth_df = d3m_DataFrame(out_df_sloth)

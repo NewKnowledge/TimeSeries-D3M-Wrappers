@@ -175,7 +175,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # produce classifications using Shapelets
         classes = pandas.DataFrame(self._shapelets.predict(input_vals))
-        output_df = pandas.concat([pandas.DataFrame(inputs['0'].d3mIndex.unique()), classes], axis = 1)
+        output_df = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), classes], axis = 1)
         # get column names from metadata
         output_df.columns = ['d3mIndex', 'label']
         shallot_df = d3m_DataFrame(output_df)
