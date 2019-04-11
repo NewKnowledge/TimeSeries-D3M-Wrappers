@@ -155,7 +155,7 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # parse values from output of time series formatter
         n_ts = len(inputs.d3mIndex.unique())
         ts_sz = int(inputs.shape[0] / n_ts)
-        input_vals = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
+        input_vals = np.array(inputs.value).reshape(n_ts, ts_sz)
 
         classes = pandas.DataFrame(self._knn.predict(input_vals))
         output_df = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), classes], axis = 1)

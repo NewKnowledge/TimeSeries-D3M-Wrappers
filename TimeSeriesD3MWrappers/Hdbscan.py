@@ -119,7 +119,7 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         # parse values from output of time series formatter
         n_ts = len(inputs.d3mIndex.unique())
         ts_sz = int(inputs.shape[0] / n_ts)
-        input_vals = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
+        input_vals = np.array(inputs.value).reshape(n_ts, ts_sz)
 
         # use HP to produce DBSCAN clustering
         if self.hyperparams['algorithm'] == 'DBSCAN':
