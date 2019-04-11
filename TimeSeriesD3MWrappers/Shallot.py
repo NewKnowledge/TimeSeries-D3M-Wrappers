@@ -107,6 +107,8 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._shapelets = Shapelets(self.hyperparams['epochs'], 
             self.hyperparams['shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
             self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'])  
+        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+        self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -132,9 +134,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         outputs: numpy ndarray of size (number_time_series,) containing classes of training time series
         '''
         if not self.hyperparams['long_format']:
-            hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-            hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs).value['0']
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
             hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
@@ -162,9 +162,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
         # temporary (until Uncharted adds conversion primitive to repo)
         if not self.hyperparams['long_format']:
-            hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-            hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs).value['0']
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
             hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))

@@ -89,6 +89,8 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._params = {}
         self._X_train = None          # training inputs
         self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
+        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+        self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -113,9 +115,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         '''
         if not self.hyperparams['long_format']:
-            hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-            hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs).value['0']
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
             hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
@@ -140,9 +140,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
         # temporary (until Uncharted adds conversion primitive to repo)
         if not self.hyperparams['long_format']:
-            hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-            hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = hp).produce(inputs = inputs).value['0']
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
             hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
