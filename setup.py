@@ -6,7 +6,7 @@ setup(name='TimeSeriesD3MWrappers',
     packages=['TimeSeriesD3MWrappers'],
     install_requires=["typing",
                       "numpy",
-                      "Sloth @ git+https://github.com/NewKnowledge/sloth@fd86004a67965065cf1687f9d756c2ed7493d1a9#egg=Sloth-2.0.5",
+                      "Sloth @ git+https://github.com/NewKnowledge/sloth@671835f98aa4f46f1d92a5d467b486cff30b753d#egg=Sloth-2.0.5",
                       ],
     entry_points = {
         'd3m.primitives': [
