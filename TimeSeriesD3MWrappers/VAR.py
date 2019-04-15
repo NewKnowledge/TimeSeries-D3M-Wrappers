@@ -283,13 +283,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         return CallResult(var_df)
 
     
-    def produce_weights(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
+    def produce_weights(self, *, inputs: Inputs, filter_value: str = None, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
         Produce correlation coefficients (weights) for each of the terms used in the regression model
 
         Parameters
         ----------
-        None
+        filter_value:   value to select a filter from column filter index for which to return correlation coefficient matrix. If None, 
+                        method returns most recent filter
 
         Returns
         ----------
@@ -299,21 +300,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             dataset there can be multiple rows in this output dataset. Terms that aren't included in a specific timeseries index will 
             have a value of NA in the associated matrix entry.
         """
-
-        # sort test dataset by datetime_filter and filter_index if they exist to get correct ordering of d3mIndex
-        if self.hyperparams['datetime_filter'] and self.hyperparams['filter_index']:
-            inputs = inputs.sort_values(by = [inputs.columns[self.hyperparams['datetime_filter']], inputs.columns[self.hyperparams['filter_index']]])
-        elif self.hyperparams['datetime_filter']:
-            inputs = inputs.sort_values(by = inputs.columns[self.hyperparams['datetime_filter']])
-        elif self.hyperparams['filter_index']:
-            inputs = inputs.sort_values(by = inputs.columns[self.hyperparams['filter_index']])
+        if filter_value is None:
+            filter_value = inputs.iloc[:, self.hyperparams['datetime_filter']].max()
 
         # get correlation coefficients 
-        coef = []
-        for fit, vals in zip(self._fits, self._values):
-            if vals.shape[1] > 1:
-                coef.append(fit.coefs)
-        print(coef)
+        coef = [fit.coefs if vals.shape[1] > 1 else np.array([1]) for fit, vals in zip(self._fits, self._values)]
+        idx = np.where(inputs.iloc[:, self.hyperparams['datetime_filter']].unique() == filter_value)[0][0]
+        coef_df = pandas.DataFrame(coef[idx][0], columns= inputs.iloc[:, self.hyperparams['filter_index']].unique())
+        return CallResult(coef_df)
     
 
 if __name__ == '__main__':
@@ -330,5 +324,5 @@ if __name__ == '__main__':
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
     #results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    #print(results.value)
+    results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value), filter_value='2017')
+    print(results.value)
