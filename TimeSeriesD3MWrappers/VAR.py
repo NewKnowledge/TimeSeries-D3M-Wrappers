@@ -282,7 +282,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         return CallResult(var_df)
 
-    '''
+    
     def produce_weights(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
         Produce correlation coefficients (weights) for each of the terms used in the regression model
@@ -299,7 +299,22 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             dataset there can be multiple rows in this output dataset. Terms that aren't included in a specific timeseries index will 
             have a value of NA in the associated matrix entry.
         """
-    '''
+
+        # sort test dataset by datetime_filter and filter_index if they exist to get correct ordering of d3mIndex
+        if self.hyperparams['datetime_filter'] and self.hyperparams['filter_index']:
+            inputs = inputs.sort_values(by = [inputs.columns[self.hyperparams['datetime_filter']], inputs.columns[self.hyperparams['filter_index']]])
+        elif self.hyperparams['datetime_filter']:
+            inputs = inputs.sort_values(by = inputs.columns[self.hyperparams['datetime_filter']])
+        elif self.hyperparams['filter_index']:
+            inputs = inputs.sort_values(by = inputs.columns[self.hyperparams['filter_index']])
+
+        # get correlation coefficients 
+        coef = []
+        for fit, vals in zip(self._fits, self._values):
+            if vals.shape[1] > 1:
+                coef.append(fit.coefs)
+        print(coef)
+    
 
 if __name__ == '__main__':
     
@@ -314,6 +329,6 @@ if __name__ == '__main__':
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
-    results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    print(results.value)
-    #results.value.to_csv('preds.csv', index=False)
+    #results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
+    var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
+    #print(results.value)
