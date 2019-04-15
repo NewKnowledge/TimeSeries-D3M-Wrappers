@@ -312,8 +312,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # get correlation coefficients 
         coef = [fit.coefs if vals.shape[1] > 1 else np.array([1]) for fit, vals in zip(self._fits, self._values)]
-        idx = np.where(inputs.iloc[:, self.hyperparams['datetime_filter']].unique() == filter_value)[0][0]
-        coef_df = pandas.DataFrame(coef[idx][0], columns= inputs.iloc[:, self.hyperparams['filter_index']].unique())
+        idx = np.where(np.sort(inputs.iloc[:, self.hyperparams['datetime_filter']].unique()) == filter_value)[0][0]
+        inputs_filtered = inputs.loc[inputs[list(inputs)[self.hyperparams['datetime_filter']]] == filter_value]
+        coef_df = pandas.DataFrame(coef[idx][0], columns= inputs_filtered.iloc[:, self.hyperparams['filter_index']].unique())
         return CallResult(coef_df)
     
 
