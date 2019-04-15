@@ -69,6 +69,11 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='The q order of the ARMA model in case some time series are univariate')
+    weights_filter_value = hyperparams.Hyperparameter[typing.Union[str, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='value to select a filter from column filter index for which to return correlation  \
+            coefficient matrix. If None, method returns most recent filter')
     pass
 
 class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
@@ -283,7 +288,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         return CallResult(var_df)
 
     
-    def produce_weights(self, *, inputs: Inputs, filter_value: str = None, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
+    def produce_weights(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
         Produce correlation coefficients (weights) for each of the terms used in the regression model
 
@@ -300,8 +305,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             dataset there can be multiple rows in this output dataset. Terms that aren't included in a specific timeseries index will 
             have a value of NA in the associated matrix entry.
         """
-        if filter_value is None:
+        if self.hyperparams['weights_filter_value'] is None:
             filter_value = inputs.iloc[:, self.hyperparams['datetime_filter']].max()
+        else:
+            filter_value = self.hyperparams['weights_filter_value']
 
         # get correlation coefficients 
         coef = [fit.coefs if vals.shape[1] > 1 else np.array([1]) for fit, vals in zip(self._fits, self._values)]
@@ -324,5 +331,5 @@ if __name__ == '__main__':
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
     #results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value), filter_value='2017')
+    results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
