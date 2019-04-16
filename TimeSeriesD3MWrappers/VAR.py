@@ -271,8 +271,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
             else:
                 final_forecasts.append(future_forecast)
-        print(final_forecasts)
-        print(len(final_forecasts))
+        
+        # convert categorical columns back to categorical output
+        final_forecasts = [forecast.iloc[:,idxs].round().astype(int) for forecast, idxs in zip(final_forecasts, self._cat_indices)]
+
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
         future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
