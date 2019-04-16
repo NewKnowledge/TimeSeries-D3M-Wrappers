@@ -7,6 +7,7 @@ import typing
 from statsmodels.tsa.api import VAR as vector_ar
 import statsmodels.api as sm
 from statsmodels.tsa.arima_model import ARMA
+from sklearn.preprocessing import OneHotEncoder
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
@@ -132,6 +133,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._values = None 
         self._fits = None
         self._final_logs = None
+        self._cats = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -180,9 +182,18 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         time_index = times[self.hyperparams['datetime_index']]
         inputs.index = pandas.DatetimeIndex(inputs.iloc[:,time_index])
 
-        # eliminate categorical variables, times, primary key
-        cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
+        # eliminate times, primary key
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+
+        # convert categorical variables to 1-hot encoded, add Gaussian noise
+        encoder = OneHotEncoder(handle_unknown='ignore')
+        cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
+        self._cats = np.array()
+        for c in cat:
+            encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
+            inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray() + \
+                np.random.rand(inputs.shape[0], len(encoder.categories_[0])) * .001)
+            self._cats = np.concatenate((list(inputs)[c] + '_' + encoder.categories_[0], self._cats))
 
         # check that targets aren't categorical
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
@@ -262,8 +273,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
 
         # select desired columns to return
+        print(future_forecast.head())
         colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
         future_forecast.columns = list(set(self._X_train[0]))
+        print(colnames)
+        print(future_forecast.columns)
         future_forecast = future_forecast[colnames]
         
         output_df = pandas.concat([output_df, future_forecast], axis=1)
