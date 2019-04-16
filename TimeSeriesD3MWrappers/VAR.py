@@ -133,7 +133,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._values = None 
         self._fits = None
         self._final_logs = None
-        self._cats = None
+        self._cat_indices = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -188,12 +188,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # convert categorical variables to 1-hot encoded, add Gaussian noise
         encoder = OneHotEncoder(handle_unknown='ignore')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
-        self._cats = np.array()
-        for c in cat:
+        categories = cat.copy()
+        categories.remove(self.hyperparams['datetime_filter'])
+        categories.remove(self.hyperparams['filter_index'])
+        for c in categories:
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray() + \
                 np.random.rand(inputs.shape[0], len(encoder.categories_[0])) * .001)
-            self._cats = np.concatenate((list(inputs)[c] + '_' + encoder.categories_[0], self._cats))
 
         # check that targets aren't categorical
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
@@ -212,8 +213,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].iloc[:,time_index]), 
                 max(year[0][1].iloc[:,time_index]))) for company in year] for year in company_dfs]
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
+        interpolated_cat_indices = [[[np.where(list(company) == list(inputs)[c]) for c in categories] for company in year] for year in reind]
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
+        self._cat_indices = [sum(idxs, []) for idxs in interpolated_cat_indices]
         self._X_train = vals
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
@@ -268,16 +271,15 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
             else:
                 final_forecasts.append(future_forecast)
+        print(final_forecasts)
+        print(len(final_forecasts))
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
         future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
 
         # select desired columns to return
-        print(future_forecast.head())
         colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
         future_forecast.columns = list(set(self._X_train[0]))
-        print(colnames)
-        print(future_forecast.columns)
         future_forecast = future_forecast[colnames]
         
         output_df = pandas.concat([output_df, future_forecast], axis=1)
