@@ -53,8 +53,9 @@ class Hyperparams(hyperparams.Hyperparams):
         elements=hyperparams.Hyperparameter[int](-1),
         default=(),
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
-        description="A set of inputs column indices that contain unique identifiers on which \
-            time series should be clustered.",
+        description="A list of column indices that contain unique identifiers on which \
+            time series should be clustered. The time series will be clustered according to \
+            the order of the indices in the list. ORDER MATTERS",
     )
     datetime_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
@@ -175,7 +176,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs: input d3m_dataframe containing n columns of features
         
         '''
-        print(self.hyperparams['filter_indices'])
         # set datetime index
         times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
         time_index = times[self.hyperparams['datetime_index']]
@@ -188,19 +188,17 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         encoder = OneHotEncoder(handle_unknown='ignore')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
-        categories.remove(self.hyperparams['datetime_filter'])
-        categories.remove(self.hyperparams['filter_index'])
+        [categories.remove(idx) for idx in self.hyperparams['filter_indices']]
         for c in categories:
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray() + \
                 np.random.rand(inputs.shape[0], len(encoder.categories_[0])) * .001)
 
-        # check that targets aren't categorical
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        if not len(targets):
-            raise ValueError("All suggested targets are categorical variables. VAR cannot regress on categorical variables")
-
         # for each filter value, reindex and interpolate daily values
+        filtered_dfs = list(inputs.groupby([inputs.column(idx) for idx in self.hyperparams['filter_indices']]))
+        print(len(filtered_dfs))
+        print(filtered_dfs)
+
         if self.hyperparams['datetime_filter']:
             year_dfs = list(inputs.groupby(inputs.columns[self.hyperparams['datetime_filter']]))
         else:
@@ -209,6 +207,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             company_dfs = [list(year[1].groupby(year[1].columns[self.hyperparams['filter_index']])) for year in year_dfs]
         else:
             company_dfs = [year_dfs]
+        print(len(company_dfs))
+        print(company_dfs)
         reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].iloc[:,time_index]), 
                 max(year[0][1].iloc[:,time_index]))) for company in year] for year in company_dfs]
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
@@ -344,7 +344,7 @@ if __name__ == '__main__':
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'filter_indice':{2,1}, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'filter_indices':[2,1], 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
     var.set_training_data(inputs = df, outputs = None)
     '''
     var.fit()
