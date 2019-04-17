@@ -49,15 +49,13 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 15, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='maximum lag order to evluate to find model - eval criterion = AIC')
-    datetime_filter = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='index of column in input dataset that contain unique identifiers of \
-            time series that have different datetime indices')
-    filter_index = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='index of column in input dataset that contain unique identifiers of different time series')
+    filter_indices = hyperparams.Set(
+        elements=hyperparams.Hyperparameter[int](-1),
+        default=(),
+        semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
+        description="A set of inputs column indices that contain unique identifiers on which \
+            time series should be clustered.",
+    )
     datetime_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
@@ -177,6 +175,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs: input d3m_dataframe containing n columns of features
         
         '''
+        print(self.hyperparams['filter_indices'])
         # set datetime index
         times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
         time_index = times[self.hyperparams['datetime_index']]
@@ -345,10 +344,12 @@ if __name__ == '__main__':
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'filter_index':1, 'datetime_filter': 2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'filter_indice':{2,1}, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
     var.set_training_data(inputs = df, outputs = None)
+    '''
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
     #results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
+    '''
