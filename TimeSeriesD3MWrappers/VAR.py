@@ -49,14 +49,16 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 15, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='maximum lag order to evluate to find model - eval criterion = AIC')
-    filter_indices = hyperparams.Set(
-        elements=hyperparams.Hyperparameter[int](-1),
-        default=(),
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
-        description="A list of column indices that contain unique identifiers on which \
-            time series should be clustered. The time series will be clustered according to \
-            the order of the indices in the list. ORDER MATTERS",
-    )
+    datetime_filter = hyperparams.Hyperparameter[typing.Union[int, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='index of column in input dataset that contain unique identifiers of \
+            time series that have different datetime indices')
+    filter_index = hyperparams.Hyperparameter[typing.Union[int, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='index of column in input dataset that contain unique identifiers of different time series')
+
     datetime_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
@@ -188,17 +190,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         encoder = OneHotEncoder(handle_unknown='ignore')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
-        [categories.remove(idx) for idx in self.hyperparams['filter_indices']]
+        categories.remove(self.hyperparams['datetime_filter'])
+        categories.remove(self.hyperparams['filter_index'])
         for c in categories:
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray() + \
                 np.random.rand(inputs.shape[0], len(encoder.categories_[0])) * .001)
 
         # for each filter value, reindex and interpolate daily values
-        filtered_dfs = list(inputs.groupby([inputs.column(idx) for idx in self.hyperparams['filter_indices']]))
-        print(len(filtered_dfs))
-        print(filtered_dfs)
-
         if self.hyperparams['datetime_filter']:
             year_dfs = list(inputs.groupby(inputs.columns[self.hyperparams['datetime_filter']]))
         else:
@@ -207,8 +206,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             company_dfs = [list(year[1].groupby(year[1].columns[self.hyperparams['filter_index']])) for year in year_dfs]
         else:
             company_dfs = [year_dfs]
-        print(len(company_dfs))
-        print(company_dfs)
         reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].iloc[:,time_index]), 
                 max(year[0][1].iloc[:,time_index]))) for company in year] for year in company_dfs]
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
@@ -344,12 +341,10 @@ if __name__ == '__main__':
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'filter_indices':[2,1], 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'filter_index':1, 'datetime_filter':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
     var.set_training_data(inputs = df, outputs = None)
-    '''
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
     #results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
-    '''
