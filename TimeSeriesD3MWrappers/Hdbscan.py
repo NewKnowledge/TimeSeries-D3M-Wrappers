@@ -71,7 +71,7 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
              {
                 'type': metadata_base.PrimitiveInstallationType.PIP,
                 'package': 'cython',
-                'version': '0.28.5',
+                'version': '0.29.7',
              },
              {
             'type': metadata_base.PrimitiveInstallationType.PIP,
