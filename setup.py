@@ -5,7 +5,7 @@ setup(name='TimeSeriesD3MWrappers',
     description='Five wrappers for interacting with New Knowledge time series tool Sloth',
     packages=['TimeSeriesD3MWrappers'],
     install_requires=["typing",
-                      "numpy",
+                      "numpy == 1.15.4",
                       "Sloth @ git+https://github.com/NewKnowledge/sloth@671835f98aa4f46f1d92a5d467b486cff30b753d#egg=Sloth-2.0.5",
                       ],
     entry_points = {
