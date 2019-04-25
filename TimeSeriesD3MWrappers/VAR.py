@@ -135,6 +135,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._fits = None
         self._final_logs = None
         self._cat_indices = None
+        self._encoders = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -196,16 +197,19 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
 
         # convert categorical variables to 1-hot encoded, add Gaussian noise
-        encoder = OneHotEncoder(handle_unknown='ignore')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
         categories.remove(self.hyperparams['datetime_filter'])
         categories.remove(self.hyperparams['filter_index'])
+        self._cat_indices = []
+        self._encoders = []
         for c in categories:
+            encoder = OneHotEncoder(handle_unknown='ignore')
+            self._encoders.append(encoder)
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray() + \
                 np.random.rand(inputs.shape[0], len(encoder.categories_[0])) * .001)
-
+            self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
         # for each filter value, reindex and interpolate daily values
         if self.hyperparams['datetime_filter']:
             year_dfs = list(inputs.groupby(inputs.columns[self.hyperparams['datetime_filter']]))
@@ -218,10 +222,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].iloc[:,time_index]), 
                 max(year[0][1].iloc[:,time_index]))) for company in year] for year in company_dfs]
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
-        interpolated_cat_indices = [[[np.where(list(company) == list(inputs)[c]) for c in categories] for company in year] for year in reind]
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
-        self._cat_indices = [sum(idxs, []) for idxs in interpolated_cat_indices]
         self._X_train = vals
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
@@ -277,8 +279,17 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 final_forecasts.append(future_forecast)
         
-        # convert categorical columns back to categorical output
-        final_forecasts = [forecast.iloc[:,idxs].round().astype(int) for forecast, idxs in zip(final_forecasts, self._cat_indices)]
+        # convert categorical columns back to categorical labels
+        original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
+        for forecast in final_forecasts:
+            for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
+                # round categoricals
+                forecast.iloc[:,one_hot_cat].round().astype(int)
+                # convert to categorical labels
+                forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast.iloc[:,one_hot_cat].values)
+                # remove one-hot encoded columns
+                forecast.drop(columns = [list(inputs)[c] for c in one_hot_cat], inplace = True)
+
 
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
