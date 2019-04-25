@@ -58,11 +58,11 @@ class Hyperparams(hyperparams.Hyperparams):
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of column in input dataset that contain unique identifiers of different time series')
-
     datetime_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
-        description='if multiple datetime indices exist, this HP specifies which to apply to training data')
+        description='if multiple datetime indices exist, this HP specifies which to apply to training data. If \
+            None, the primitive assumes there is only one datetime index')
     arma_p = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
@@ -180,7 +180,16 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
         # set datetime index
         times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
-        time_index = times[self.hyperparams['datetime_index']]
+        if not self.hyperparams['datetime_index']:
+            if len(times) != 1:
+                raise ValueError("There are multiple indices marked as datetime values. You must specify which index to use")
+            else:
+                time_index = times[0]
+        else:
+            if self.hyperparams['datetime_index'] not in times:
+                raise ValueError("The index you provided is not marked as a datetime value.")
+            else:
+                time_index = self.hyperparams['datetime_index']
         inputs.index = pandas.DatetimeIndex(inputs.iloc[:,time_index])
 
         # eliminate times, primary key
