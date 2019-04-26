@@ -291,7 +291,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 forecast.drop(columns = [list(inputs)[c] for c in one_hot_cat], inplace = True)
 
 
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Target') + \
+                  inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')  
+        if not len(targets):
+            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+
         final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
         future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
 

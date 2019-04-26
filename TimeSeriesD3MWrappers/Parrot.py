@@ -123,7 +123,10 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
         
         # use column according to hyperparameter index
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Target') + \
+                  inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')  
+        if not len(targets):
+            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         self._X_train = pandas.Series(data = (inputs.iloc[:,targets[self.hyperparams['index']]].values).astype(np.float),
             index = pandas.to_datetime(inputs.iloc[:, times[0]].values, format = '%Y')) 
 
@@ -149,7 +152,10 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecast = pandas.DataFrame(self._arima.predict(self.hyperparams['n_periods']))
         output_df = pandas.concat([output_df, future_forecast], axis=1)
         # get column names from metadata
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Target') + \
+                  inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')  
+        if not len(targets):
+            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         output_df.columns = [inputs.metadata.query_column(index[0])['name'], inputs.metadata.query_column(targets[self.hyperparams['index']])['name']]
         parrot_df = d3m_DataFrame(output_df)
         
