@@ -129,6 +129,9 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
             #SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
             _, labels, _ = cluster.HClusterSimilarityMatrix(input_vals, self.hyperparams['min_cluster_size'], self.hyperparams['min_samples'])
 
+        # transform labels for D3M classification task
+        labels = [x + 1 if x >= 0 else x + 2 for x in labels]
+
         # add metadata to output
         labels = pandas.DataFrame(labels)
         out_df= pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), labels], axis = 1)
