@@ -123,11 +123,11 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
 
         # use HP to produce DBSCAN clustering
         if self.hyperparams['algorithm'] == 'DBSCAN':
-            SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
-            _, labels, _ = cluster.ClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['eps'], self.hyperparams['min_samples'])
+            #SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
+            _, labels, _ = cluster.ClusterSimilarityMatrix(input_vals, self.hyperparams['eps'], self.hyperparams['min_samples'])
         else:
-            SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
-            _, labels, _ = cluster.HClusterSimilarityMatrix(SimilarityMatrix, self.hyperparams['min_cluster_size'], self.hyperparams['min_samples'])
+            #SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
+            _, labels, _ = cluster.HClusterSimilarityMatrix(input_vals, self.hyperparams['min_cluster_size'], self.hyperparams['min_samples'])
 
         # add metadata to output
         labels = pandas.DataFrame(labels)
