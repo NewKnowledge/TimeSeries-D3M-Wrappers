@@ -20,7 +20,6 @@ from .timeseries_formatter import TimeSeriesFormatterPrimitive
 __author__ = 'Distil'
 __version__ = '1.0.2'
 __contact__ = 'mailto:nklabs@newknowledge.com'
-sloth_commit = '62b82aeaf133b66aa0fec685f50e5be69f4c6935'
 
 
 Inputs = container.dataset.Dataset
@@ -83,11 +82,6 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 'type': metadata_base.PrimitiveInstallationType.PIP,
                 'package': 'cython',
                 'version': '0.29.7',
-             },
-             {
-            'type': metadata_base.PrimitiveInstallationType.PIP,
-            'package_uri': 'git+https://github.com/NewKnowledge/sloth.git@{git_commit}#egg=Sloth-2.0.6'.format(
-                git_commit=sloth_commit),
              },
              {
                 'type': metadata_base.PrimitiveInstallationType.PIP,
