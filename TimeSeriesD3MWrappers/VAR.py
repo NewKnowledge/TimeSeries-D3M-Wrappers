@@ -54,19 +54,16 @@ class Hyperparams(hyperparams.Hyperparams):
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of column in input dataset that contain unique identifiers of \
             time series that have different datetime indices')
-    datetime_format = hyperparams.Hyperparameter[typing.Union[str, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='format string needed to parse datetime column')
     filter_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of column in input dataset that contain unique identifiers of different time series')
-    datetime_index = hyperparams.Hyperparameter[typing.Union[int, None]](
+    datetime_index = hyperparams.Hyperparameter[typing.Union[list, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='if multiple datetime indices exist, this HP specifies which to apply to training data. If \
-            None, the primitive assumes there is only one datetime index')
+            None, the primitive assumes there is only one datetime index. This HP can also specify multiple indices \
+            which should be concatenated to form datetime_index')
     arma_p = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
@@ -190,13 +187,16 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             if len(times) != 1:
                 raise ValueError("There are multiple indices marked as datetime values. You must specify which index to use")
             else:
-                time_index = times[0]
+                time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
+        elif len(self.hyperparams['datetime_index']) > 1:
+            for idx in self.hyperparams['datetime_index']:
+                time_index = time_index + ' ' + inputs.iloc[:,idx].astype(str)
         else:
-            if self.hyperparams['datetime_index'] not in times:
+            if self.hyperparams['datetime_index'][0] not in times:
                 raise ValueError("The index you provided is not marked as a datetime value.")
             else:
-                time_index = self.hyperparams['datetime_index']
-        inputs.index = pandas.to_datetime(inputs.iloc[:,time_index], format = self.hyperparams['datetime_format'])
+                time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
+        inputs.index = pandas.to_datetime(time_index)
 
         # eliminate times, primary key
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
