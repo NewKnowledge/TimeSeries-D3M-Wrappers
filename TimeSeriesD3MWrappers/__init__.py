@@ -6,7 +6,7 @@ from TimeSeriesD3MWrappers.Hdbscan import Hdbscan
 from TimeSeriesD3MWrappers.VAR import VAR
 from TimeSeriesD3MWrappers.timeseries_formatter import TimeSeriesFormatterPrimitive
 
-__version__ = '1.0.2'
+__version__ = '1.0.4'
 
 __all__ = [
            "Parrot", 
