@@ -12,6 +12,7 @@ from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
+from TimeSeriesD3MWrappers import sloth_commit
 
 from .timeseries_formatter import TimeSeriesFormatterPrimitive
 
@@ -66,6 +67,11 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             'type': metadata_base.PrimitiveInstallationType.PIP,
             'package': 'cython',
             'version': '0.29.7',
+            },
+            {
+            'type': metadata_base.PrimitiveInstallationType.PIP,
+            'package_uri': 'git+https://github.com/NewKnowledge/sloth.git@{git_commit}#egg=Sloth-2.0.6'.format(
+                git_commit=sloth_commit),
             },
             {
             'type': metadata_base.PrimitiveInstallationType.PIP,
