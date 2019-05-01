@@ -181,7 +181,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
         # set datetime index
         times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
-        if not self.hyperparams['datetime_index']:
+        if self.hyperparams['datetime_index'] is None:
             if len(times) != 1:
                 raise ValueError("There are multiple indices marked as datetime values. You must specify which index to use")
             else:
