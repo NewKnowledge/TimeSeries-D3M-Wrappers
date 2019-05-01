@@ -54,6 +54,10 @@ class Hyperparams(hyperparams.Hyperparams):
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of column in input dataset that contain unique identifiers of \
             time series that have different datetime indices')
+    datetime_format = hyperparams.Hyperparameter[typing.Union[str, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='format string needed to parse datetime column')
     filter_index = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
@@ -192,7 +196,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 raise ValueError("The index you provided is not marked as a datetime value.")
             else:
                 time_index = self.hyperparams['datetime_index']
-        inputs.index = pandas.DatetimeIndex(inputs.iloc[:,time_index])
+        inputs.index = pandas.to_datetime(inputs.iloc[:,time_index], format = self.hyperparams['datetime_format'])
 
         # eliminate times, primary key
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
@@ -366,7 +370,7 @@ if __name__ == '__main__':
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'filter_index':1, 'datetime_filter':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'datetime_format':'%m-%d','filter_index':1, 'datetime_filter':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
