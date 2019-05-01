@@ -59,7 +59,7 @@ class Hyperparams(hyperparams.Hyperparams):
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of column in input dataset that contain unique identifiers of different time series')
     datetime_index = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = 0,
+        default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='if multiple datetime indices exist, this HP specifies which to apply to training data. If \
             None, the primitive assumes there is only one datetime index')
@@ -179,6 +179,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs: input d3m_dataframe containing n columns of features
         
         '''
+
         # set datetime index
         times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
         if self.hyperparams['datetime_index'] is None:
