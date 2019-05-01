@@ -192,6 +192,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
         elif len(self.hyperparams['datetime_index']) > 1:
+            time_index = ''
             for idx in self.hyperparams['datetime_index']:
                 time_index = time_index + ' ' + inputs.iloc[:,idx].astype(str)
         else:
@@ -227,8 +228,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             company_dfs = [list(year[1].groupby(year[1].columns[self.hyperparams['filter_index']])) for year in year_dfs]
         else:
             company_dfs = [year_dfs]
-        reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].iloc[:,time_index]), 
-                max(year[0][1].iloc[:,time_index]))) for company in year] for year in company_dfs]
+        reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].index), 
+                max(year[0][1].index))) for company in year] for year in company_dfs]
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
