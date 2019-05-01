@@ -290,6 +290,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # convert categorical columns back to categorical labels
         original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
+        original_cat.remove(self.hyperparams['datetime_filter'])
+        original_cat.remove(self.hyperparams['filter_index'])
         for forecast in final_forecasts:
             for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
                 # round categoricals
@@ -298,7 +300,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast.iloc[:,one_hot_cat].values)
                 # remove one-hot encoded columns
                 forecast.drop(columns = [list(inputs)[c] for c in one_hot_cat], inplace = True)
-
 
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Target') + \
                   inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')  
@@ -378,6 +379,6 @@ if __name__ == '__main__':
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
-    #results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
+    results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
