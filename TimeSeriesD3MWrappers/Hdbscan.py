@@ -14,12 +14,13 @@ from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
-from TimeSeriesD3MWrappers import sloth_commit
 from .timeseries_formatter import TimeSeriesFormatterPrimitive
 
 __author__ = 'Distil'
 __version__ = '1.0.2'
 __contact__ = 'mailto:nklabs@newknowledge.com'
+sloth_commit = '62b82aeaf133b66aa0fec685f50e5be69f4c6935'
+
 
 Inputs = container.dataset.Dataset
 Outputs = container.dataset.Dataset
