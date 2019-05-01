@@ -301,8 +301,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 # remove one-hot encoded columns
                 forecast.drop(columns = [list(inputs)[c] for c in one_hot_cat], inplace = True)
 
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Target') + \
-                  inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')  
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        if not len(targets):
+            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')  
         if not len(targets):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
 
