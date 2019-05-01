@@ -58,8 +58,9 @@ class Hyperparams(hyperparams.Hyperparams):
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='index of column in input dataset that contain unique identifiers of different time series')
-    datetime_index = hyperparams.Hyperparameter[typing.Union[list, None]](
-        default = None,
+    datetime_index = hyperparams.Set(
+        elements=hyperparams.Hyperparameter[int](-1),
+        default=(),
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
         description='if multiple datetime indices exist, this HP specifies which to apply to training data. If \
             None, the primitive assumes there is only one datetime index. This HP can also specify multiple indices \
@@ -183,8 +184,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # set datetime index
         times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
-        if self.hyperparams['datetime_index'] is None:
-            if len(times) != 1:
+        if len(self.hyperparams['datetime_index']) == 0:
+            if len(times) == 0:
+                raise ValueError("There are no indices marked as datetime values.")
+            elif len(times) > 1:
                 raise ValueError("There are multiple indices marked as datetime values. You must specify which index to use")
             else:
                 time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
@@ -370,7 +373,7 @@ if __name__ == '__main__':
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'datetime_format':'%m-%d','filter_index':1, 'datetime_filter':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'datetime_index':[3,2],'filter_index':1, 'datetime_filter':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
