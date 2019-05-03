@@ -184,7 +184,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
 
         # set datetime index
-        times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time')
+        times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
+                inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
+        times = list(set(times))
         if len(self.hyperparams['datetime_index']) == 0:
             if len(times) == 0:
                 raise ValueError("There are no indices marked as datetime values.")
