@@ -193,7 +193,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             elif len(times) > 1:
                 raise ValueError("There are multiple indices marked as datetime values. You must specify which index to use")
             else:
-                time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
+                time_index = inputs.iloc[:,times[0]]
         elif len(self.hyperparams['datetime_index']) > 1:
             time_index = ''
             for idx in self.hyperparams['datetime_index']:
@@ -203,18 +203,41 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 raise ValueError("The index you provided is not marked as a datetime value.")
             else:
                 time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
-        inputs.index = pandas.to_datetime(time_index)
+        inputs['temp_time_index'] = pandas.to_datetime(time_index)
 
-        # eliminate times, primary key
+        # break df into categoricals and continuous variables
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-
-        # convert categorical variables to 1-hot encoded, add Gaussian noise
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
-        categories.remove(self.hyperparams['datetime_filter'])
-        categories.remove(self.hyperparams['filter_index'])
+        continuous = list(set(np.arange(0, inputs.shape[1])) - set(key) - set(cat) - set(times))
+        
+        # convert categorical variables to 1-hot encoded
+        for c in categories:
+            encoder = OneHotEncoder(handle_unknown='ignore')
+            self._encoders.append(encoder)
+            encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
+            inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray())
+            self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
+            # drop original categorical variable
+            inputs.drop(columns = list(inputs)[c])
+        
+        # group data if datetime is not unique
+        if inputs.duplicated(subset = 'temp_time_index').sum() > 0:
+            # sum rows with same index
+            inputs.groupby('temp_time_index').sum()
+            print(inputs)
+            # convert categorical sums back to 1 hot encodings 
+            inputs.iloc[:self._cat_indices].apply(np.sign)
+        print(inputs)
+
+        if self.hyperparams['datetime_filter'] is not None:
+            categories.remove(self.hyperparams['datetime_filter'])
+        if self.hyperparams['filter_index'] is not None:
+            categories.remove(self.hyperparams['filter_index'])
         self._cat_indices = []
         self._encoders = []
+        # convert categorical variables to 1-hot encoded, add Gaussian noise
+
         for c in categories:
             encoder = OneHotEncoder(handle_unknown='ignore')
             self._encoders.append(encoder)
