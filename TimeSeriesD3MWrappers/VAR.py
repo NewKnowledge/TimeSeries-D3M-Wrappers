@@ -28,6 +28,27 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):  
+    datetime_index = hyperparams.Set(
+        elements=hyperparams.Hyperparameter[int](-1),
+        default=(),
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
+        description='if multiple datetime indices exist, this HP specifies which to apply to training data. If \
+            None, the primitive assumes there is only one datetime index. This HP can also specify multiple indices \
+            which should be concatenated to form datetime_index')
+    datetime_index_unique = hyperparams.UniformBool(
+        default = False, 
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
+        description="whether the datetime "
+    )
+    datetime_filter = hyperparams.Hyperparameter[typing.Union[int, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='index of column in input dataset that contain unique identifiers of \
+            time series that have different datetime indices')
+    filter_index = hyperparams.Hyperparameter[typing.Union[int, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='index of column in input dataset that contain unique identifiers of different time series')
     n_periods = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
@@ -50,22 +71,6 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 15, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='maximum lag order to evluate to find model - eval criterion = AIC')
-    datetime_filter = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='index of column in input dataset that contain unique identifiers of \
-            time series that have different datetime indices')
-    filter_index = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='index of column in input dataset that contain unique identifiers of different time series')
-    datetime_index = hyperparams.Set(
-        elements=hyperparams.Hyperparameter[int](-1),
-        default=(),
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
-        description='if multiple datetime indices exist, this HP specifies which to apply to training data. If \
-            None, the primitive assumes there is only one datetime index. This HP can also specify multiple indices \
-            which should be concatenated to form datetime_index')
     arma_p = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = 0,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
@@ -204,18 +209,21 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
         inputs['temp_time_index'] = pandas.to_datetime(time_index)
-        inputs.index = pandas.to_datetime(time_index)
         
-        # break df into categoricals and continuous variables
+        # mark key and categorical variables
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
         
+        ds_filter = None
+        filter_idx = None
         # convert categorical variables to 1-hot encoded
         if self.hyperparams['datetime_filter'] is not None:
             categories.remove(self.hyperparams['datetime_filter'])
+            ds_filter = list(inputs)[self.hyperparams['datetime_filter']]
         if self.hyperparams['filter_index'] is not None:
             categories.remove(self.hyperparams['filter_index'])
+            filter_idx = list(inputs)[self.hyperparams['filter_index']]
         self._cat_indices = []
         self._encoders = []
         for c in categories:
@@ -224,6 +232,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray())
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
+        
+        # create unique_index column if other indices
+        unique_index = inputs['temp_time_index']
+        if self.hyperparams['filter_index'] is not None:
+            unique_index = unique_index.astype(str).str.cat(inputs.iloc[:, self.hyperparams['filter_index']].astype(str))
+
         # drop original categorical variables, index key, and times
         inputs.set_index('temp_time_index', inplace=True)
         drop_idx = categories + times + key
@@ -233,7 +247,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         flattened_cat_indices = [val for sublist in self._cat_indices for val in sublist]
 
         # group data if datetime is not unique
-        if not inputs.index.is_unique:
+        if not unique_index.is_unique:
             # sum rows with same index
             inputs = inputs.groupby(inputs.index).agg('sum')
             # convert categorical sums back to 1 hot encodings
@@ -244,17 +258,20 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         print(inputs.index)
         print('done test')
 
+        dt.strftime
+
         # for each filter value, reindex and interpolate daily values
-        if self.hyperparams['datetime_filter']:
-            year_dfs = list(inputs.groupby(inputs.columns[self.hyperparams['datetime_filter']]))
+        if ds_filter is not None:
+            year_dfs = list(inputs.groupby([ds_filter]))
+            year_dfs = [year[1].drop(columns = ds_filter) for year in year_dfs]
         else:
             year_dfs = [inputs]
-        if self.hyperparams['filter_index']:
-            company_dfs = [list(year[1].groupby(year[1].columns[self.hyperparams['filter_index']])) for year in year_dfs]
+        if filter_idx is not None:
+            company_dfs = [list(year.groupby([filter_idx])) for year in year_dfs]
+            company_dfs = [[company[1].drop(columns=filter_idx) for company in year] for year in company_dfs]
         else:
             company_dfs = [year_dfs]
-        reind = [[company[1].drop(company[1].columns[cat + key + times], axis = 1).reindex(pandas.date_range(min(year[0][1].index), 
-                max(year[0][1].index))) for company in year] for year in company_dfs]
+        reind = [[company.reindex(pandas.date_range(min(year[0].index), max(year[0].index))) for company in year] for year in company_dfs]
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
