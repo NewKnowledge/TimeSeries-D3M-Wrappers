@@ -16,6 +16,9 @@ from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, dataset_regex_filter, dataset_remove_columns
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 __author__ = 'Distil'
 __version__ = '1.0.0'
 __contact__ = 'mailto:nklabs@newknowledge.com'
@@ -68,7 +71,7 @@ class Hyperparams(hyperparams.Hyperparams):
     max_lags = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
-        default = 15, 
+        default = 10, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='maximum lag order to evluate to find model - eval criterion = AIC')
     arma_p = hyperparams.Hyperparameter[typing.Union[int, None]](
@@ -164,9 +167,17 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
         self._fits = []
         for vals, model in zip(self._values, models):
+
+            # iteratively try fewer lags if problems with matrix decomposition
             if vals.shape[1] > 1:
-                lags = model.select_order(maxlags = self.hyperparams['max_lags']).aic
-                lags = lags if lags > 1 else 1
+                lags = self.hyperparams['max_lags']
+                while lags > 0:
+                    try:
+                        lags = model.select_order(maxlags = self.hyperparams['max_lags']).aic
+                    except np.linalg.LinAlgError:
+                        lags = lags // 2
+                        logging.debug('Matrix decomposition error because max lag order is too high. Trying {} lags'.format(lags))
+                print(lags)
                 self._fits.append(model.fit(lags))
             else:
                 self._fits.append(model.fit(disp = -1))
