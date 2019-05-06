@@ -203,48 +203,44 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 raise ValueError("The index you provided is not marked as a datetime value.")
             else:
                 time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
-        inputs['temp_time_index'] = pandas.to_datetime(time_index)
-
+        inputs.index = pandas.to_datetime(time_index)
+        
         # break df into categoricals and continuous variables
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
-        continuous = list(set(np.arange(0, inputs.shape[1])) - set(key) - set(cat) - set(times))
         
         # convert categorical variables to 1-hot encoded
-        for c in categories:
-            encoder = OneHotEncoder(handle_unknown='ignore')
-            self._encoders.append(encoder)
-            encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
-            inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray())
-            self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
-            # drop original categorical variable
-            inputs.drop(columns = list(inputs)[c])
-        
-        # group data if datetime is not unique
-        if inputs.duplicated(subset = 'temp_time_index').sum() > 0:
-            # sum rows with same index
-            inputs.groupby('temp_time_index').sum()
-            print(inputs)
-            # convert categorical sums back to 1 hot encodings 
-            inputs.iloc[:self._cat_indices].apply(np.sign)
-        print(inputs)
-
         if self.hyperparams['datetime_filter'] is not None:
             categories.remove(self.hyperparams['datetime_filter'])
         if self.hyperparams['filter_index'] is not None:
             categories.remove(self.hyperparams['filter_index'])
         self._cat_indices = []
         self._encoders = []
-        # convert categorical variables to 1-hot encoded, add Gaussian noise
-
         for c in categories:
             encoder = OneHotEncoder(handle_unknown='ignore')
             self._encoders.append(encoder)
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
-            inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray() + \
-                np.random.rand(inputs.shape[0], len(encoder.categories_[0])) * .001)
+            inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray())
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
+        # drop original categorical variables, index key, and times
+        drop_idx = categories + times + key
+        inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
+        self._cat_indices = [arr - len(drop_idx) for arr in self._cat_indices]
+        flattened_cat_indices = [val for sublist in self._cat_indices for val in sublist]
+
+        # group data if datetime is not unique
+        if not inputs.index.is_unique:
+            # sum rows with same index
+            inputs = inputs.groupby(inputs.index).agg('sum')
+            # convert categorical sums back to 1 hot encodings
+            inputs = inputs.iloc[:,flattened_cat_indices].apply(np.sign)
+        # add Gaussian noise to categorical variables
+        inputs = inputs.iloc[:, flattened_cat_indices] + np.random.rand(inputs.shape[0], len(flattened_cat_indices)) * .001
+        print(inputs)
+        print(inputs.index)
+        print('done test')
+        
         # for each filter value, reindex and interpolate daily values
         if self.hyperparams['datetime_filter']:
             year_dfs = list(inputs.groupby(inputs.columns[self.hyperparams['datetime_filter']]))
@@ -419,11 +415,11 @@ if __name__ == '__main__':
     to_remove = (1, 2, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30)
     rm_client = dataset_remove_columns.RemoveColumnsPrimitive(hyperparams = hyperparams_class.defaults().replace({"columns":to_remove}))
     df = rm_client.produce(inputs = input_dataset).value
-    print(df.head())
 
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
     df = ds2df_client.produce(inputs = df).value
+    print(df.head())
 
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     var = VAR(hyperparams = var_hp.defaults().replace({}))
