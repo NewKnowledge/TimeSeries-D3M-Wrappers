@@ -242,7 +242,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs.set_index('temp_time_index', inplace=True)
         drop_idx = categories + times + key
         inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
-        inputs.drop(columns = 'temp_time_index', inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
         flattened_cat_indices = [val for sublist in self._cat_indices for val in sublist]
 
@@ -254,11 +253,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             inputs = inputs.iloc[:,flattened_cat_indices].apply(np.sign)
         # add Gaussian noise to categorical variables
         inputs = inputs.iloc[:, flattened_cat_indices] + np.random.rand(inputs.shape[0], len(flattened_cat_indices)) * .001
-        print(inputs)
-        print(inputs.index)
-        print('done test')
-
-        dt.strftime
 
         # for each filter value, reindex and interpolate daily values
         if ds_filter is not None:
