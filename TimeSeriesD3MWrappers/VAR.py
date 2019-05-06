@@ -203,6 +203,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 raise ValueError("The index you provided is not marked as a datetime value.")
             else:
                 time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
+        inputs['temp_time_index'] = pandas.to_datetime(time_index)
         inputs.index = pandas.to_datetime(time_index)
         
         # break df into categoricals and continuous variables
@@ -224,9 +225,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray())
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
         # drop original categorical variables, index key, and times
+        inputs.set_index('temp_time_index', inplace=True)
         drop_idx = categories + times + key
         inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
-        self._cat_indices = [arr - len(drop_idx) for arr in self._cat_indices]
+        inputs.drop(columns = 'temp_time_index', inplace=True)
+        self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
         flattened_cat_indices = [val for sublist in self._cat_indices for val in sublist]
 
         # group data if datetime is not unique
@@ -240,7 +243,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         print(inputs)
         print(inputs.index)
         print('done test')
-        
+
         # for each filter value, reindex and interpolate daily values
         if self.hyperparams['datetime_filter']:
             year_dfs = list(inputs.groupby(inputs.columns[self.hyperparams['datetime_filter']]))
