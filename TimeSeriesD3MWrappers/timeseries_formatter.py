@@ -56,14 +56,14 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
                        'http://schema.org/Text',
                        'https://metadata.datadrivendiscovery.org/types/Attribute')
     _media_types = ('text/csv',)
-    '''
+    
     __author__ = 'Uncharted Software',
     metadata = metadata_base.PrimitiveMetadata(
         {
             'id': '1c4aed23-f3d3-4e6b-9710-009a9bc9b694',
             'version': '0.1.2',
             'name': 'Time series formatter',
-            'python_path': 'd3m.primitives.distil.TimeSeriesFormatter',
+            'python_path': 'd3m.primitives.data_preprocessing.timeseries_formatter.DatasetCommon',
             'keywords': ['series', 'reader', 'csv'],
             'source': {
                 'name': 'Uncharted Software',
@@ -82,7 +82,7 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
             'primitive_family': metadata_base.PrimitiveFamily.DATA_PREPROCESSING,
         }
     )
-    '''
+    
     @classmethod
     def _find_csv_file_column(cls, inputs_metadata: metadata_base.DataMetadata, res_id: int) -> typing.Optional[int]:
         indices = utils.list_columns_with_semantic_types(inputs_metadata, cls._semantic_types, at=(res_id,))
