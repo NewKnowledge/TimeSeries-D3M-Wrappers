@@ -365,7 +365,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # select desired columns to return
         colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
-        future_forecast.columns = list(set(self._X_train[0]))
         future_forecast = future_forecast[colnames]
         
         output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
