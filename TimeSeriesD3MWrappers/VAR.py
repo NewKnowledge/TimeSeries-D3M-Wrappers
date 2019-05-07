@@ -147,6 +147,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._final_logs = None
         self._cat_indices = None
         self._encoders = None
+        self._unique_index = True
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -167,7 +168,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
         self._fits = []
         for vals, model in zip(self._values, models):
-
             # iteratively try fewer lags if problems with matrix decomposition
             if vals.shape[1] > 1:
                 lags = self.hyperparams['max_lags']
@@ -258,12 +258,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # group data if datetime is not unique
         if not unique_index.is_unique:
-            # sum rows with same index
             inputs = inputs.groupby(inputs.index).agg('sum')
-            # convert categorical sums back to 1 hot encodings
-            inputs.iloc[:,flattened_cat_indices] = inputs.iloc[:,flattened_cat_indices].apply(np.sign)
-        # add Gaussian noise to categorical variables
-        inputs.iloc[:, flattened_cat_indices] = inputs.iloc[:, flattened_cat_indices] + 1
+            self._unique_index = False
+        # translate categorical variables away from 1
+        else:
+            inputs.iloc[:, flattened_cat_indices] = inputs.iloc[:, flattened_cat_indices] + 1
 
         # for each filter value, reindex and interpolate daily values
         if ds_filter is not None:
@@ -281,6 +280,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
         self._X_train = vals
+        print(self._X_train)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
@@ -336,19 +336,20 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 final_forecasts.append(future_forecast)
         
         # convert categorical columns back to categorical labels
-        original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
-        if self.hyperparams['datetime_filter'] is not None:
-            original_cat.remove(self.hyperparams['datetime_filter'])
-        if self.hyperparams['filter_index'] is not None:
-            original_cat.remove(self.hyperparams['filter_index'])
-        for forecast in final_forecasts:
-            for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
-                # round categoricals
-                forecast[one_hot_cat] = forecast[one_hot_cat].apply(lambda x: x >= 1.5).astype(int)
-                # convert to categorical labels
-                forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast[one_hot_cat].values)
-                # remove one-hot encoded columns
-                forecast.drop(columns = one_hot_cat, inplace = True)
+        if not self._unique_index:
+            original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
+            if self.hyperparams['datetime_filter'] is not None:
+                original_cat.remove(self.hyperparams['datetime_filter'])
+            if self.hyperparams['filter_index'] is not None:
+                original_cat.remove(self.hyperparams['filter_index'])
+            for forecast in final_forecasts:
+                for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
+                    # round categoricals
+                    forecast[one_hot_cat] = forecast[one_hot_cat].apply(lambda x: x >= 1.5).astype(int)
+                    # convert to categorical labels
+                    forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast[one_hot_cat].values)
+                    # remove one-hot encoded columns
+                    forecast.drop(columns = one_hot_cat, inplace = True)
 
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
@@ -356,6 +357,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if not len(targets):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         
+        print(forecast)
+        print(set(self._X_train[0]))
+
         if self.hyperparams['filter_index'] is not None or self.hyperparams['filter_index'] is not None:
             final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
             future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
