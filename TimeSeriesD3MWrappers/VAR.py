@@ -279,6 +279,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
+        vals = [df.fillna() for df in vals]
         self._X_train = vals
         print(self._X_train)
 
@@ -360,16 +361,26 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         print(forecast)
         print(set(self._X_train[0]))
 
+        # select desired columns to return
+        '''
+        if not self._unique_index:
+            future_forecast.columns = list(set(self._X_train[0]))
+            times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
+                inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
+            times = list(set(times))
+            unique_counts = inputs.iloc[:,times[0]].value_counts()
+        '''
+        colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
         if self.hyperparams['filter_index'] is not None or self.hyperparams['filter_index'] is not None:
             final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
             future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
             future_forecast.columns = list(set(self._X_train[0]))
+            future_forecast = future_forecast[colnames]
+        elif not self._unique_index:
+            future_forecast.columns = list(set(self._X_train[0]))
         else:
             future_forecast = forecast
-
-        # select desired columns to return
-        colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
-        future_forecast = future_forecast[colnames]
+            future_forecast = future_forecast[colnames]
         
         output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
         var_df = d3m_DataFrame(output_df)
