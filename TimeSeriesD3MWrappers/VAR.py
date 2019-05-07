@@ -55,7 +55,7 @@ class Hyperparams(hyperparams.Hyperparams):
     n_periods = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
-        default = 30, 
+        default = 61, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
        description='number of periods to predict')
     interval = hyperparams.Hyperparameter[typing.Union[int, None]](
@@ -305,7 +305,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
         self._X_train = vals
-        print(self._X_train)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
@@ -393,10 +392,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
                 inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
             times = list(set(times))
-            unique_counts = inputs.iloc[:,times[0]].value_counts()
-            print(inputs.iloc[:,times[0]].unique())
-            print(unique_counts[inputs.iloc[:,times[0]].unique()[0]])
-            target_names = [colname.str.contains(inputs.metadata.query_column(target)['name'], regex = False) for colname in colnames for target in targets]
+
+            # broadcast predictions
+            pred_times = np.flip(inputs.iloc[:,times[0]].unique())
+            unique_counts = [inputs.iloc[:,times[0]].value_counts()[p] for p in pred_times]
+            final_forecasts = [f.index.repeat(unique_counts).reset_index(drop=True) for f in final_forecasts]
+            target_names = [c for c in colnames for t in targets if inputs.metadata.query_column(t)['name'] in c]
             print(target_names)
         else:
             target_names = [inputs.metadata.query_column(target)['name'] for target in targets]
