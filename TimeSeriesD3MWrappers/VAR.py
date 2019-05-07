@@ -379,7 +379,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                     forecast.drop(columns = one_hot_cat, inplace = True)
                 else:
                     # round categoricals to whole numbers
-                    forecast.iloc[:,one_hot_cat] = forecast.iloc[:, one_hot_cat].round().astype(int)
+                    forecast[one_hot_cat] = forecast[one_hot_cat].astype(int)
 
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
@@ -387,29 +387,29 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if not len(targets):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         
-        print(future_forecasts)
-
         # select desired columns to return
-        '''
         if not self._unique_index:
-            future_forecast.columns = list(set(self._X_train[0]))
+            colnames = list(self._X_train[0])
             times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
                 inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
             times = list(set(times))
             unique_counts = inputs.iloc[:,times[0]].value_counts()
-        '''
-        colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
-        if self.hyperparams['filter_index'] is not None or self.hyperparams['filter_index'] is not None:
-            final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
-            future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
-            future_forecast.columns = list(set(self._X_train[0]))
-            future_forecast = future_forecast[colnames]
-        elif not self._unique_index:
-            future_forecast.columns = list(set(self._X_train[0]))
+            print(inputs.iloc[:,times[0]].unique())
+            print(unique_counts[inputs.iloc[:,times[0]].unique()[0]])
+            target_names = [colname.str.contains(inputs.metadata.query_column(target)['name'], regex = False) for colname in colnames for target in targets]
+            print(target_names)
         else:
-            future_forecast = forecast
-            future_forecast = future_forecast[colnames]
+            target_names = [inputs.metadata.query_column(target)['name'] for target in targets]
+            if self.hyperparams['filter_index'] is not None or self.hyperparams['filter_index'] is not None:
+                final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
+                colnames = list(set(self._X_train[0]))
+            else:
+                colnames = list(final_forecasts[0])
+        future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
+        future_forecast.columns = colnames
+        future_forecast = future_forecast[target_names]
         
+        # combine d3mIndex and predictions
         output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
         var_df = d3m_DataFrame(output_df)
         
