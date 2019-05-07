@@ -333,11 +333,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
         
         # undo differencing transformations 
-        print(future_forecasts[0].cumsum(axis=0))
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
             else np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
+        print(future_forecasts)
         future_forecasts = [future_forecast.apply(lambda x: x + min - 1) for future_forecast, min in zip(future_forecasts, self._mins)]
+        print(future_forecasts)
 
         # filter forecast according to interval, resahpe according to filter_name
         final_forecasts = []
