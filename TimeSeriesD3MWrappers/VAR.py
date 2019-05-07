@@ -469,7 +469,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # reshape matrix if multiple lags
         if self._lag_order > 1:
             vals = coef[idx].reshape(-1, coef[idx].shape[2])
-            idx = [c + '_lag_order_' + str(order) for c in cols for order in np.arange(coef[idx].shape[0])]
+            idx = [c + '_lag_order_' + str(order) for order in np.arange(coef[idx].shape[0]) + 1 for c in cols]
         else:
             vals = coef[idx][0]
             idx = cols
@@ -512,8 +512,8 @@ if __name__ == '__main__':
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL0_acled_reduced/TEST/dataset_TEST/datasetDoc.json')
-    results = var.produce(inputs = ds2df_client.produce(inputs = rm_client.produce(inputs = test_dataset).value).value)
-    #results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
+    #results = var.produce(inputs = ds2df_client.produce(inputs = rm_client.produce(inputs = test_dataset).value).value)
+    results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
     
 
