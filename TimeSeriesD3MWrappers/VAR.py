@@ -171,13 +171,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             # iteratively try fewer lags if problems with matrix decomposition
             if vals.shape[1] > 1:
                 lags = self.hyperparams['max_lags']
-                while lags > 0:
+                while lags > 1:
                     try:
                         lags = model.select_order(maxlags = self.hyperparams['max_lags']).aic
                     except np.linalg.LinAlgError:
                         lags = lags // 2
                         logging.debug('Matrix decomposition error because max lag order is too high. Trying {} lags'.format(lags))
-                print(lags)
+                lags = lags if lags > 1 else 1
                 self._fits.append(model.fit(lags))
             else:
                 self._fits.append(model.fit(disp = -1))
@@ -261,9 +261,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             # sum rows with same index
             inputs = inputs.groupby(inputs.index).agg('sum')
             # convert categorical sums back to 1 hot encodings
-            inputs = inputs.iloc[:,flattened_cat_indices].apply(np.sign)
+            inputs.iloc[:,flattened_cat_indices] = inputs.iloc[:,flattened_cat_indices].apply(np.sign)
         # add Gaussian noise to categorical variables
-        inputs = inputs.iloc[:, flattened_cat_indices] + np.random.rand(inputs.shape[0], len(flattened_cat_indices)) * .001
+        inputs.iloc[:, flattened_cat_indices] = inputs.iloc[:, flattened_cat_indices] + 1
 
         # for each filter value, reindex and interpolate daily values
         if ds_filter is not None:
@@ -337,32 +337,38 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # convert categorical columns back to categorical labels
         original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
-        original_cat.remove(self.hyperparams['datetime_filter'])
-        original_cat.remove(self.hyperparams['filter_index'])
+        if self.hyperparams['datetime_filter'] is not None:
+            original_cat.remove(self.hyperparams['datetime_filter'])
+        if self.hyperparams['filter_index'] is not None:
+            original_cat.remove(self.hyperparams['filter_index'])
         for forecast in final_forecasts:
             for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
                 # round categoricals
-                forecast.iloc[:,one_hot_cat].round().astype(int)
+                forecast[one_hot_cat] = forecast[one_hot_cat].apply(lambda x: x >= 1.5).astype(int)
                 # convert to categorical labels
-                forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast.iloc[:,one_hot_cat].values)
+                forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast[one_hot_cat].values)
                 # remove one-hot encoded columns
-                forecast.drop(columns = [list(inputs)[c] for c in one_hot_cat], inplace = True)
+                forecast.drop(columns = one_hot_cat, inplace = True)
 
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')  
         if not len(targets):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-
-        final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
-        future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
+        
+        if self.hyperparams['filter_index'] is not None or self.hyperparams['filter_index'] is not None:
+            final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
+            future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
+            future_forecast.columns = list(set(self._X_train[0]))
+        else:
+            future_forecast = forecast
 
         # select desired columns to return
         colnames = [inputs.metadata.query_column(target)['name'] for target in targets]
         future_forecast.columns = list(set(self._X_train[0]))
         future_forecast = future_forecast[colnames]
         
-        output_df = pandas.concat([output_df, future_forecast], axis=1)
+        output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
         var_df = d3m_DataFrame(output_df)
         
         # first column ('d3mIndex')
