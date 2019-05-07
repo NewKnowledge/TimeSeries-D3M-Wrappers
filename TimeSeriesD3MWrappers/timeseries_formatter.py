@@ -63,11 +63,15 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
             'id': '1c4aed23-f3d3-4e6b-9710-009a9bc9b694',
             'version': '0.1.2',
             'name': 'Time series formatter',
-            'python_path': 'd3m.primitives.data_preprocessing.time_series_reshaper.DatasetCommon',
+            'python_path': 'd3m.primitives.data_preprocessing.time_series_to_list.DatasetCommon',
             'keywords': ['series', 'reader', 'csv'],
             'source': {
                 'name': 'Uncharted Software',
-                'contact': 'mailto:chris.bethune@uncharted.software'
+                'contact': 'mailto:chris.bethune@uncharted.software',
+                'uris': [
+                    # Unstructured URIs.
+                    "https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers",
+                ],
             },
             'installation': [{
                 'type': metadata_base.PrimitiveInstallationType.PIP,
