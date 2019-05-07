@@ -184,21 +184,21 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                     except np.linalg.LinAlgError:
                         lags = lags // 2
                         logging.debug('Matrix decomposition error because max lag order is too high. Trying max lag order {}'.format(lags))
-                    else:
-                        lags = self.hyperparams['max_lags']
-                        while lags > 1:
-                            try:
-                                self._fits.append(model.fit(lags))
-                                self._lag_order = lags
-                                logging.debug('Successfully fit model with lag order {}'.format(lags))
-                                break
-                            except ValueError:
-                                logging.debug('Value Error - lag order {} is too large for the model. Trying lag order {} instead'.format(lags, lags - 1))
-                                lags -=1
-                        else:
+                else:
+                    lags = self.hyperparams['max_lags']
+                    while lags > 1:
+                        try:
                             self._fits.append(model.fit(lags))
                             self._lag_order = lags
                             logging.debug('Successfully fit model with lag order {}'.format(lags))
+                            break
+                        except ValueError:
+                            logging.debug('Value Error - lag order {} is too large for the model. Trying lag order {} instead'.format(lags, lags - 1))
+                            lags -=1
+                    else:
+                        self._fits.append(model.fit(lags))
+                        self._lag_order = lags
+                        logging.debug('Successfully fit model with lag order {}'.format(lags))
                 if lags == 0:
                     logging.debug('At least 1 coefficient is needed for prediction. Setting lag order to 1')
                     lags = 1
