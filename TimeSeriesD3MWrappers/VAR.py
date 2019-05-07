@@ -449,19 +449,22 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             dataset there can be multiple rows in this output dataset. Terms that aren't included in a specific timeseries index will 
             have a value of NA in the associated matrix entry.
         """
+        '''
         if self.hyperparams['weights_filter_value'] is None:
             filter_value = inputs.iloc[:, self.hyperparams['datetime_filter']].max()
         else:
             filter_value = self.hyperparams['weights_filter_value']
-
+        '''
         # get correlation coefficients 
         coef = [fit.coefs if vals.shape[1] > 1 else np.array([1]) for fit, vals in zip(self._fits, self._values)]
-        idx = np.where(np.sort(inputs.iloc[:, self.hyperparams['datetime_filter']].unique()) == filter_value)[0][0]
-        inputs_filtered = inputs.loc[inputs[list(inputs)[self.hyperparams['datetime_filter']]] == filter_value]
-        coef_df = pandas.DataFrame(coef[idx][0], columns= inputs_filtered.iloc[:, self.hyperparams['filter_index']].unique())
+        if self.hyperparams['weights_filter_value'] is not None:
+            idx = np.where(np.sort(inputs.iloc[:, self.hyperparams['datetime_filter']].unique()) == self.hyperparams['weights_filter_value'])[0][0]
+            inputs_filtered = inputs.loc[inputs[list(inputs)[self.hyperparams['datetime_filter']]] == filter_value]
+            coef_df = pandas.DataFrame(coef[idx][0], columns= inputs_filtered.iloc[:, self.hyperparams['filter_index']].unique())
+        else:
+            coef_df = pandas.DataFrame(coef[0], columns = list(self._X_train[0]))
         return CallResult(coef_df)
     
-
 if __name__ == '__main__':
     
     '''
