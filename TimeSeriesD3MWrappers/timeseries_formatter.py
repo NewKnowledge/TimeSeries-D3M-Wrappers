@@ -63,7 +63,7 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
             'id': '1c4aed23-f3d3-4e6b-9710-009a9bc9b694',
             'version': '0.1.2',
             'name': 'Time series formatter',
-            'python_path': 'd3m.primitives.data_preprocessing.timeseries_formatter.DatasetCommon',
+            'python_path': 'd3m.primitives.data_preprocessing.timeseries_reshaper.DatasetCommon',
             'keywords': ['series', 'reader', 'csv'],
             'source': {
                 'name': 'Uncharted Software',
