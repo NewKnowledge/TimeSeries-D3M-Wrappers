@@ -181,19 +181,24 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                         logging.debug('Successfully performed model order selection. Optimal order = {} lags'.format(lags))
                     except np.linalg.LinAlgError:
                         lags = lags // 2
-                        logging.debug('Matrix decomposition error because max lag order is too high. Trying {} lags'.format(lags))
+                        logging.debug('Matrix decomposition error because max lag order is too high. Trying lag order {}'.format(lags))
                 if lags == 0:
                     logging.debug('At least 1 coefficient is needed for prediction. Setting lag order to 1')
                     lags = 1
                     self._fits.append(model.fit(lags))
                 elif lags == 1:
                     lags = self.hyperparams['max_lags']
-                    try:
+                    while lags > 1:
+                        try:
+                            self._fits.append(model.fit(lags))
+                            logging.debug('Successfully fit model with lag order {}'.format(lags))
+                            break
+                        except ValueError:
+                            logging.debug('Value Error - lag order {} is too large for the model. Trying lag order {} instead'.format(lags, lags - 1))
+                            lags -=1
+                    else:
                         self._fits.append(model.fit(lags))
-                        logging.debug('Value Error - {} lags is too many for the model. Trying {} lags instead'.format(lags, lags - 1))
-                    except ValueError:
-                        logging.debug('Value Error - {} lags is too many for the model. Trying {} lags instead'.format(lags, lags - 1))
-                        lags -=1
+                        logging.debug('Successfully fit model with lag order {}'.format(lags))
             else:
                 self._fits.append(model.fit(disp = -1))
         return CallResult(None)
