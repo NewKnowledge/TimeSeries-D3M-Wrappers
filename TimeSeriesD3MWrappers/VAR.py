@@ -180,6 +180,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                     try:
                         lags = model.select_order(maxlags = self.hyperparams['max_lags']).aic
                         logging.debug('Successfully performed model order selection. Optimal order = {} lags'.format(lags))
+                        if lags == 0:
+                            logging.debug('At least 1 coefficient is needed for prediction. Setting lag order to 1')
+                            lags = 1
+                            self._lag_order = lags
+                            self._fits.append(model.fit(lags))
+                        else:
+                            self._lag_order = lags
+                            self._fits.append(model.fit(lags))
                         break
                     except np.linalg.LinAlgError:
                         lags = lags // 2
@@ -199,15 +207,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                         self._fits.append(model.fit(lags))
                         self._lag_order = lags
                         logging.debug('Successfully fit model with lag order {}'.format(lags))
-                if lags == 0:
-                    logging.debug('At least 1 coefficient is needed for prediction. Setting lag order to 1')
-                    lags = 1
-                    self._lag_order = lags
-                    self._fits.append(model.fit(lags))
-                else:
-                    self._lag_order = lags
-                    self._fits.append(model.fit(lags))
-
             else:
                 self._fits.append(model.fit(disp = -1))
         return CallResult(None)
@@ -456,14 +455,18 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             filter_value = self.hyperparams['weights_filter_value']
         '''
         # get correlation coefficients 
+        print(len(self._fits))
+        print(len(self._values))
         coef = [fit.coefs if vals.shape[1] > 1 else np.array([1]) for fit, vals in zip(self._fits, self._values)]
+        print(coef[0].shape)
         if self.hyperparams['weights_filter_value'] is not None:
             idx = np.where(np.sort(inputs.iloc[:, self.hyperparams['datetime_filter']].unique()) == self.hyperparams['weights_filter_value'])[0][0]
-            inputs_filtered = inputs.loc[inputs[list(inputs)[self.hyperparams['datetime_filter']]] == filter_value]
-            coef_df = pandas.DataFrame(coef[idx][0], columns= inputs_filtered.iloc[:, self.hyperparams['filter_index']].unique())
+            inputs_filtered = inputs.loc[inputs[list(inputs)[self.hyperparams['datetime_filter']]] == self.hyperparams['weights_filter_value']]
+            labels = inputs_filtered.iloc[:, self.hyperparams['filter_index']].unique()
         else:
-            coef_df = pandas.DataFrame(coef[0], columns = list(self._X_train[0]))
-        return CallResult(coef_df)
+            idx = 0
+            labels = list(self._X_train[0])
+        return CallResult(pandas.DataFrame(coef[idx][0], columns = labels, index = labels))
     
 if __name__ == '__main__':
     
