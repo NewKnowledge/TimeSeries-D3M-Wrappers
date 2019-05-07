@@ -143,6 +143,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._params = {}
         self._X_train = None
         self._mins = None
+        self._lag_order = None
         self._values = None 
         self._fits = None
         self._final_logs = None
@@ -179,26 +180,34 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                     try:
                         lags = model.select_order(maxlags = self.hyperparams['max_lags']).aic
                         logging.debug('Successfully performed model order selection. Optimal order = {} lags'.format(lags))
+                        break
                     except np.linalg.LinAlgError:
                         lags = lags // 2
-                        logging.debug('Matrix decomposition error because max lag order is too high. Trying lag order {}'.format(lags))
+                        logging.debug('Matrix decomposition error because max lag order is too high. Trying max lag order {}'.format(lags))
+                    else:
+                        lags = self.hyperparams['max_lags']
+                        while lags > 1:
+                            try:
+                                self._fits.append(model.fit(lags))
+                                self._lag_order = lags
+                                logging.debug('Successfully fit model with lag order {}'.format(lags))
+                                break
+                            except ValueError:
+                                logging.debug('Value Error - lag order {} is too large for the model. Trying lag order {} instead'.format(lags, lags - 1))
+                                lags -=1
+                        else:
+                            self._fits.append(model.fit(lags))
+                            self._lag_order = lags
+                            logging.debug('Successfully fit model with lag order {}'.format(lags))
                 if lags == 0:
                     logging.debug('At least 1 coefficient is needed for prediction. Setting lag order to 1')
                     lags = 1
+                    self._lag_order = lags
                     self._fits.append(model.fit(lags))
-                elif lags == 1:
-                    lags = self.hyperparams['max_lags']
-                    while lags > 1:
-                        try:
-                            self._fits.append(model.fit(lags))
-                            logging.debug('Successfully fit model with lag order {}'.format(lags))
-                            break
-                        except ValueError:
-                            logging.debug('Value Error - lag order {} is too large for the model. Trying lag order {} instead'.format(lags, lags - 1))
-                            lags -=1
-                    else:
-                        self._fits.append(model.fit(lags))
-                        logging.debug('Successfully fit model with lag order {}'.format(lags))
+                else:
+                    self._lag_order = lags
+                    self._fits.append(model.fit(lags))
+
             else:
                 self._fits.append(model.fit(disp = -1))
         return CallResult(None)
