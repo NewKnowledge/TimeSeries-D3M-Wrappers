@@ -396,9 +396,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             # broadcast predictions
             pred_times = np.flip(inputs.iloc[:,times[0]].unique())
             unique_counts = [inputs.iloc[:,times[0]].value_counts()[p] for p in pred_times]
-            final_forecasts = [f.index.repeat(unique_counts).reset_index(drop=True) for f in final_forecasts]
+            final_forecasts = [f.loc[f.index.repeat(unique_counts)].reset_index(drop=True) for f in final_forecasts]
             target_names = [c for c in colnames for t in targets if inputs.metadata.query_column(t)['name'] in c]
-            print(target_names)
         else:
             target_names = [inputs.metadata.query_column(target)['name'] for target in targets]
             if self.hyperparams['filter_index'] is not None or self.hyperparams['filter_index'] is not None:
