@@ -142,6 +142,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         self._params = {}
         self._X_train = None
+        self._mins = None
         self._values = None 
         self._fits = None
         self._final_logs = None
@@ -155,7 +156,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
         
         # log transformation for standardization, difference, drop NAs
-        self._values = [np.log(year.values) for year in self._X_train]
+        self._mins = [year.values.min() if year.values.min() < 0 else 0 for year in self._X_train]
+        self._values = [year.apply(lambda x: x - min + 1) for year, min in zip(self._X_train, self._mins)]
+        self._values = [np.log(year.values) for year in self._values]
         self._final_logs = [year[-1:,] for year in self._values]
         self._values = [np.diff(year,axis=0) for year in self._values]
 
@@ -322,6 +325,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
             else np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
+        future_forecasts = [future_forecast.apply(lambda x: x + min - 1) for future_forecast, min in zip(future_forecasts, self._mins)]
 
         # filter forecast according to interval, resahpe according to filter_name
         final_forecasts = []
