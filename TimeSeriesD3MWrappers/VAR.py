@@ -350,9 +350,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
             else np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
-        print(future_forecasts)
-        future_forecasts = [future_forecast.apply(lambda x: x + min - 1) for future_forecast, min in zip(future_forecasts, self._mins)]
-        print(future_forecasts)
+        if self._lag_order == 1:
+            future_forecasts = [future_forecast.apply(lambda x: x + min - 1) for future_forecast, min in zip(future_forecasts, self._mins)]
 
         # filter forecast according to interval, resahpe according to filter_name
         final_forecasts = []
@@ -467,7 +466,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
 if __name__ == '__main__':
     
-    '''
+
     # stock_market test case
     input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
@@ -505,5 +504,5 @@ if __name__ == '__main__':
     results = var.produce(inputs = ds2df_client.produce(inputs = rm_client.produce(inputs = test_dataset).value).value)
     #results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
-
+    '''
 
