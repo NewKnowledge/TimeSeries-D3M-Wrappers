@@ -283,15 +283,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         drop_idx = categories + times + key
         inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
-        flattened_cat_indices = [val for sublist in self._cat_indices for val in sublist]
 
         # group data if datetime is not unique
         if not unique_index.is_unique:
             inputs = inputs.groupby(inputs.index).agg('sum')
             self._unique_index = False
-        # translate categorical variables away from 1
-        else:
-            inputs.iloc[:, flattened_cat_indices] = inputs.iloc[:, flattened_cat_indices] + 1
 
         # for each filter value, reindex and interpolate daily values
         if ds_filter is not None:
@@ -367,20 +363,23 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 final_forecasts.append(future_forecast)
         
         # convert categorical columns back to categorical labels
-        if self._unique_index:
-            original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
-            if self.hyperparams['datetime_filter'] is not None:
-                original_cat.remove(self.hyperparams['datetime_filter'])
-            if self.hyperparams['filter_index'] is not None:
-                original_cat.remove(self.hyperparams['filter_index'])
-            for forecast in final_forecasts:
-                for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
+        original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
+        if self.hyperparams['datetime_filter'] is not None:
+            original_cat.remove(self.hyperparams['datetime_filter'])
+        if self.hyperparams['filter_index'] is not None:
+            original_cat.remove(self.hyperparams['filter_index'])
+        for forecast in final_forecasts:
+            for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
+                if self._unique_index:
                     # round categoricals
                     forecast[one_hot_cat] = forecast[one_hot_cat].apply(lambda x: x >= 1.5).astype(int)
                     # convert to categorical labels
                     forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast[one_hot_cat].values)
                     # remove one-hot encoded columns
                     forecast.drop(columns = one_hot_cat, inplace = True)
+                else:
+                    # round categoricals to whole numbers
+                    forecast.iloc[:,one_hot_cat] = forecast.iloc[:, one_hot_cat].round().astype(int)
 
         targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
@@ -388,8 +387,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if not len(targets):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         
-        print(final_forecasts)
-        print(set(self._X_train[0]))
+        print(future_forecasts)
 
         # select desired columns to return
         '''
@@ -466,7 +464,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
 if __name__ == '__main__':
     
-
+    '''
     # stock_market test case
     input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
@@ -504,5 +502,5 @@ if __name__ == '__main__':
     results = var.produce(inputs = ds2df_client.produce(inputs = rm_client.produce(inputs = test_dataset).value).value)
     #results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
-    '''
+    
 
