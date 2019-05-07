@@ -171,17 +171,29 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
         self._fits = []
         for vals, model in zip(self._values, models):
+
             # iteratively try fewer lags if problems with matrix decomposition
             if vals.shape[1] > 1:
                 lags = self.hyperparams['max_lags']
                 while lags > 1:
                     try:
                         lags = model.select_order(maxlags = self.hyperparams['max_lags']).aic
+                        logging.debug('Successfully performed model order selection. Optimal order = {} lags'.format(lags))
                     except np.linalg.LinAlgError:
                         lags = lags // 2
                         logging.debug('Matrix decomposition error because max lag order is too high. Trying {} lags'.format(lags))
-                lags = lags if lags > 1 else 1
-                self._fits.append(model.fit(lags))
+                if lags == 0:
+                    logging.debug('At least 1 coefficient is needed for prediction. Setting lag order to 1')
+                    lags = 1
+                    self._fits.append(model.fit(lags))
+                elif lags == 1:
+                    lags = self.hyperparams['max_lags']
+                    try:
+                        self._fits.append(model.fit(lags))
+                        logging.debug('Value Error - {} lags is too many for the model. Trying {} lags instead'.format(lags, lags - 1))
+                    except ValueError:
+                        logging.debug('Value Error - {} lags is too many for the model. Trying {} lags instead'.format(lags, lags - 1))
+                        lags -=1
             else:
                 self._fits.append(model.fit(disp = -1))
         return CallResult(None)
@@ -282,7 +294,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
-        vals = [df.fillna() for df in vals]
         self._X_train = vals
         print(self._X_train)
 
@@ -322,6 +333,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
         
         # undo differencing transformations 
+        print(future_forecasts[0].cumsum(axis=0))
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
             else np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
@@ -341,7 +353,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 final_forecasts.append(future_forecast)
         
         # convert categorical columns back to categorical labels
-        if not self._unique_index:
+        if self._unique_index:
             original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
             if self.hyperparams['datetime_filter'] is not None:
                 original_cat.remove(self.hyperparams['datetime_filter'])
@@ -362,7 +374,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if not len(targets):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
         
-        print(forecast)
+        print(final_forecasts)
         print(set(self._X_train[0]))
 
         # select desired columns to return
