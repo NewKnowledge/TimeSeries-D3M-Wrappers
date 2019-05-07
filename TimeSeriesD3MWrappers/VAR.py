@@ -86,7 +86,7 @@ class Hyperparams(hyperparams.Hyperparams):
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='value to select a filter from column filter index for which to return correlation  \
-            coefficient matrix. If None, method returns most recent filter')
+            coefficient matrix.')
     pass
 
 class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
@@ -455,18 +455,25 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             filter_value = self.hyperparams['weights_filter_value']
         '''
         # get correlation coefficients 
-        print(len(self._fits))
-        print(len(self._values))
         coef = [fit.coefs if vals.shape[1] > 1 else np.array([1]) for fit, vals in zip(self._fits, self._values)]
-        print(coef[0].shape)
+
+        # create column labels
         if self.hyperparams['weights_filter_value'] is not None:
             idx = np.where(np.sort(inputs.iloc[:, self.hyperparams['datetime_filter']].unique()) == self.hyperparams['weights_filter_value'])[0][0]
             inputs_filtered = inputs.loc[inputs[list(inputs)[self.hyperparams['datetime_filter']]] == self.hyperparams['weights_filter_value']]
-            labels = inputs_filtered.iloc[:, self.hyperparams['filter_index']].unique()
+            cols = inputs_filtered.iloc[:, self.hyperparams['filter_index']].unique()
         else:
             idx = 0
-            labels = list(self._X_train[0])
-        return CallResult(pandas.DataFrame(coef[idx][0], columns = labels, index = labels))
+            cols = list(self._X_train[0])
+        
+        # reshape matrix if multiple lags
+        if self._lag_order > 1:
+            vals = coef[idx].reshape(-1, coef[idx].shape[2])
+            idx = [c + '_lag_order_' + str(order) for c in cols for order in np.arange(coef[idx].shape[0])]
+        else:
+            vals = coef[idx][0]
+            idx = cols
+        return CallResult(pandas.DataFrame(vals, columns = cols, index = idx))
     
 if __name__ == '__main__':
     
