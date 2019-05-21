@@ -27,6 +27,7 @@ step_2.add_hyperparameter(name='filter_index_one', argument_type= ArgumentType.V
 step_2.add_hyperparameter(name='filter_index_two', argument_type= ArgumentType.VALUE, data=1)
 step_2.add_hyperparameter(name='n_periods', argument_type= ArgumentType.VALUE, data=25)
 step_2.add_hyperparameter(name='interval', argument_type= ArgumentType.VALUE, data=25)
+step_2.add_hyperparameter(name='datetime_index_unit', argument_type= ArgumentType.VALUE, data='D')
 step_2.add_output('produce')
 pipeline_description.add_step(step_2)
 

@@ -38,11 +38,10 @@ class Hyperparams(hyperparams.Hyperparams):
         description='if multiple datetime indices exist, this HP specifies which to apply to training data. If \
             None, the primitive assumes there is only one datetime index. This HP can also specify multiple indices \
             which should be concatenated to form datetime_index')
-    datetime_index_unique = hyperparams.UniformBool(
-        default = False, 
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
-        description="whether the datetime "
-    )
+    datetime_index_unit = hyperparams.Hyperparameter[typing.Union[str, None]](
+        default = None,
+        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='unit of the datetime column if datetime column is integer or float')
     filter_index_one = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
@@ -248,7 +247,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 raise ValueError("The index you provided is not marked as a datetime value.")
             else:
                 time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
-        inputs['temp_time_index'] = pandas.to_datetime(time_index)
+        inputs['temp_time_index'] = pandas.to_datetime(time_index, unit = self.hyperparams['datetime_index_unit'])
         
         # mark key and categorical variables
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
