@@ -24,7 +24,7 @@ step_2 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series
 step_2.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
 step_2.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
 step_2.add_hyperparameter(name='seasonal_differencing', argument_type= ArgumentType.VALUE, data=11)
-step_2.add_hyperparameter(name='n_periods', argument_type= ArgumentType.VALUE, data=29)
+step_2.add_hyperparameter(name='n_periods', argument_type= ArgumentType.VALUE, data=21)
 step_2.add_output('produce')
 pipeline_description.add_step(step_2)
 

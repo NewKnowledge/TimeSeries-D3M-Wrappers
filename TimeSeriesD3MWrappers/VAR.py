@@ -150,6 +150,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._cat_indices = None
         self._encoders = None
         self._unique_index = True
+        self.ds_filter = None
+        self.filter_idx = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -254,15 +256,15 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
         
-        ds_filter = None
-        filter_idx = None
+        self.ds_filter = None
+        self.filter_idx = None
         # convert categorical variables to 1-hot encoded
         if self.hyperparams['datetime_filter'] is not None:
             categories.remove(self.hyperparams['datetime_filter'])
-            ds_filter = list(inputs)[self.hyperparams['datetime_filter']]
+            self.ds_filter = list(inputs)[self.hyperparams['datetime_filter']]
         if self.hyperparams['filter_index'] is not None:
             categories.remove(self.hyperparams['filter_index'])
-            filter_idx = list(inputs)[self.hyperparams['filter_index']]
+            self.filter_idx = list(inputs)[self.hyperparams['filter_index']]
         self._cat_indices = []
         self._encoders = []
         for c in categories:
@@ -289,14 +291,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._unique_index = False
 
         # for each filter value, reindex and interpolate daily values
-        if ds_filter is not None:
-            year_dfs = list(inputs.groupby([ds_filter]))
-            year_dfs = [year[1].drop(columns = ds_filter) for year in year_dfs]
+        if self.ds_filter is not None:
+            year_dfs = list(inputs.groupby([self.ds_filter]))
+            year_dfs = [year[1].drop(columns = self.ds_filter) for year in year_dfs]
         else:
             year_dfs = [inputs]
-        if filter_idx is not None:
-            company_dfs = [list(year.groupby([filter_idx])) for year in year_dfs]
-            company_dfs = [[company[1].drop(columns=filter_idx) for company in year] for year in company_dfs]
+        if self.filter_idx is not None:
+            company_dfs = [list(year.groupby([self.filter_idx])) for year in year_dfs]
+            company_dfs = [[company[1].drop(columns=self.filter_idx) for company in year] for year in company_dfs]
         else:
             company_dfs = [year_dfs]
         reind = [[company.reindex(pandas.date_range(min(year[0].index), max(year[0].index))) for company in year] for year in company_dfs]
@@ -307,10 +309,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # update hyperparams
         colnames = list(inputs)
-        if self.hyperparams['datetime_filter'] is not None:
-            self.hyperparams['datetime_filter'] == np.where(ds_filter == colnames)
-        if self.hyperparams['filter_index'] is not None:
-            self.hyperparams['filter_index'] == np.where(filter_idx == colnames)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
@@ -331,12 +329,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
 
         # sort test dataset by datetime_filter and filter_index if they exist to get correct ordering of d3mIndex
-        if self.hyperparams['datetime_filter'] and self.hyperparams['filter_index']:
-            inputs = inputs.sort_values(by = [inputs.columns[self.hyperparams['datetime_filter']], inputs.columns[self.hyperparams['filter_index']]])
+        if self.ds_filter is None and self.filter_idx is None:
+            inputs = inputs.sort_values(by = [self.ds_filter, self.filter_idx])
         elif self.hyperparams['datetime_filter']:
-            inputs = inputs.sort_values(by = inputs.columns[self.hyperparams['datetime_filter']])
+            inputs = inputs.sort_values(by = self.ds_filter)
         elif self.hyperparams['filter_index']:
-            inputs = inputs.sort_values(by = inputs.columns[self.hyperparams['filter_index']])
+            inputs = inputs.sort_values(by = self.filter_idx)
 
         # take d3m index from input test set
         index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
@@ -358,7 +356,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         final_forecasts = []
         idx = None 
         if self.hyperparams['datetime_interval_exception']:
-            idx = np.where(np.sort(inputs[inputs.columns[self.hyperparams['datetime_filter']]].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
+            idx = np.where(np.sort(inputs[self.ds_filter].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
         for future_forecast, ind in zip(future_forecasts, range(len(future_forecasts))):
             if ind == idx:
                 final_forecasts.append(future_forecast.iloc[0:1,:])
@@ -406,7 +404,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             target_names = [c for c in colnames for t in targets if inputs.metadata.query_column(t)['name'] in c]
         else:
             target_names = [inputs.metadata.query_column(target)['name'] for target in targets]
-            if self.hyperparams['filter_index'] is not None or self.hyperparams['filter_index'] is not None:
+            if self.hyperparams['datetime_filter'] is not None or self.hyperparams['filter_index'] is not None:
                 final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
                 colnames = list(set(self._X_train[0]))
             else:
