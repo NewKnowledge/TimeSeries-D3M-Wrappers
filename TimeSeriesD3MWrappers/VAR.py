@@ -43,15 +43,14 @@ class Hyperparams(hyperparams.Hyperparams):
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
         description="whether the datetime "
     )
-    datetime_filter = hyperparams.Hyperparameter[typing.Union[int, None]](
+    filter_index_one = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='index of column in input dataset that contain unique identifiers of \
-            time series that have different datetime indices')
-    filter_index = hyperparams.Hyperparameter[typing.Union[int, None]](
+        description='top-level index of column in input dataset that contain unique identifiers of different time series')
+    filter_index_two = hyperparams.Hyperparameter[typing.Union[int, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='index of column in input dataset that contain unique identifiers of different time series')
+        description='second-level index of column in input dataset that contain unique identifiers of different time series')
     n_periods = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
@@ -150,7 +149,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._cat_indices = None
         self._encoders = None
         self._unique_index = True
-        self.ds_filter = None
+        self.filter_idx_one = None
         self.filter_idx = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
@@ -256,15 +255,15 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
         
-        self.ds_filter = None
+        self.filter_idx_one = None
         self.filter_idx = None
         # convert categorical variables to 1-hot encoded
-        if self.hyperparams['datetime_filter'] is not None:
-            categories.remove(self.hyperparams['datetime_filter'])
-            self.ds_filter = list(inputs)[self.hyperparams['datetime_filter']]
-        if self.hyperparams['filter_index'] is not None:
-            categories.remove(self.hyperparams['filter_index'])
-            self.filter_idx = list(inputs)[self.hyperparams['filter_index']]
+        if self.hyperparams['filter_index_one'] is not None:
+            categories.remove(self.hyperparams['filter_index_one'])
+            self.filter_idx_one = list(inputs)[self.hyperparams['filter_index_one']]
+        if self.hyperparams['filter_index_two'] is not None:
+            categories.remove(self.hyperparams['filter_index_two'])
+            self.filter_idx = list(inputs)[self.hyperparams['filter_index_two']]
         self._cat_indices = []
         self._encoders = []
         for c in categories:
@@ -276,8 +275,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # create unique_index column if other indices
         unique_index = inputs['temp_time_index']
-        if self.hyperparams['filter_index'] is not None:
-            unique_index = unique_index.astype(str).str.cat(inputs.iloc[:, self.hyperparams['filter_index']].astype(str))
+        if self.hyperparams['filter_index_two'] is not None:
+            unique_index = unique_index.astype(str).str.cat(inputs.iloc[:, self.hyperparams['filter_index_two']].astype(str))
 
         # drop original categorical variables, index key, and times
         inputs.set_index('temp_time_index', inplace=True)
@@ -291,9 +290,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._unique_index = False
 
         # for each filter value, reindex and interpolate daily values
-        if self.ds_filter is not None:
-            year_dfs = list(inputs.groupby([self.ds_filter]))
-            year_dfs = [year[1].drop(columns = self.ds_filter) for year in year_dfs]
+        if self.filter_idx_one is not None:
+            year_dfs = list(inputs.groupby([self.filter_idx_one]))
+            year_dfs = [year[1].drop(columns = self.filter_idx_one) for year in year_dfs]
         else:
             year_dfs = [inputs]
         if self.filter_idx is not None:
@@ -328,12 +327,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 variable with the associated HP
         """
 
-        # sort test dataset by datetime_filter and filter_index if they exist to get correct ordering of d3mIndex
-        if self.ds_filter is not None and self.filter_idx is not None:
-            inputs = inputs.sort_values(by = [self.ds_filter, self.filter_idx])
-        elif self.hyperparams['datetime_filter']:
-            inputs = inputs.sort_values(by = self.ds_filter)
-        elif self.hyperparams['filter_index']:
+        # sort test dataset by filter_index_one and filter_index if they exist to get correct ordering of d3mIndex
+        if self.filter_idx_one is not None and self.filter_idx is not None:
+            inputs = inputs.sort_values(by = [self.filter_idx_one, self.filter_idx])
+        elif self.hyperparams['filter_index_one']:
+            inputs = inputs.sort_values(by = self.filter_idx_one)
+        elif self.hyperparams['filter_index_two']:
             inputs = inputs.sort_values(by = self.filter_idx)
 
         # take d3m index from input test set
@@ -356,7 +355,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         final_forecasts = []
         idx = None 
         if self.hyperparams['datetime_interval_exception']:
-            idx = np.where(np.sort(inputs[self.ds_filter].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
+            idx = np.where(np.sort(inputs[self.filter_idx_one].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
         for future_forecast, ind in zip(future_forecasts, range(len(future_forecasts))):
             if ind == idx:
                 final_forecasts.append(future_forecast.iloc[0:1,:])
@@ -367,10 +366,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # convert categorical columns back to categorical labels
         original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
-        if self.hyperparams['datetime_filter'] is not None:
-            original_cat.remove(self.hyperparams['datetime_filter'])
-        if self.hyperparams['filter_index'] is not None:
-            original_cat.remove(self.hyperparams['filter_index'])
+        if self.hyperparams['filter_index_one'] is not None:
+            original_cat.remove(self.hyperparams['filter_index_one'])
+        if self.hyperparams['filter_index_two'] is not None:
+            original_cat.remove(self.hyperparams['filter_index_two'])
         for forecast in final_forecasts:
             for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
                 if self._unique_index:
@@ -404,7 +403,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             target_names = [c for c in colnames for t in targets if inputs.metadata.query_column(t)['name'] in c]
         else:
             target_names = [inputs.metadata.query_column(target)['name'] for target in targets]
-            if self.hyperparams['datetime_filter'] is not None or self.hyperparams['filter_index'] is not None:
+            if self.hyperparams['filter_index_one'] is not None or self.hyperparams['filter_index_two'] is not None:
                 final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
                 colnames = list(set(self._X_train[0]))
             else:
@@ -453,20 +452,15 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             dataset there can be multiple rows in this output dataset. Terms that aren't included in a specific timeseries index will 
             have a value of NA in the associated matrix entry.
         """
-        '''
-        if self.hyperparams['weights_filter_value'] is None:
-            filter_value = inputs.iloc[:, self.hyperparams['datetime_filter']].max()
-        else:
-            filter_value = self.hyperparams['weights_filter_value']
-        '''
+
         # get correlation coefficients 
         coef = [fit.coefs if vals.shape[1] > 1 else np.array([1]) for fit, vals in zip(self._fits, self._values)]
 
         # create column labels
         if self.hyperparams['weights_filter_value'] is not None:
-            idx = np.where(np.sort(inputs.iloc[:, self.hyperparams['datetime_filter']].unique()) == self.hyperparams['weights_filter_value'])[0][0]
-            inputs_filtered = inputs.loc[inputs[list(inputs)[self.hyperparams['datetime_filter']]] == self.hyperparams['weights_filter_value']]
-            cols = inputs_filtered.iloc[:, self.hyperparams['filter_index']].unique()
+            idx = np.where(np.sort(inputs.iloc[:, self.hyperparams['filter_index_one']].unique()) == self.hyperparams['weights_filter_value'])[0][0]
+            inputs_filtered = inputs.loc[inputs[list(inputs)[self.hyperparams['filter_index_one']]] == self.hyperparams['weights_filter_value']]
+            cols = inputs_filtered.iloc[:, self.hyperparams['filter_index_two']].unique()
         else:
             idx = 0
             cols = list(self._X_train[0])
@@ -491,7 +485,7 @@ if __name__ == '__main__':
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'datetime_index':[3,2],'filter_index':1, 'datetime_filter':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'datetime_index':[3,2],'filter_index_two':1, 'filter_index_one':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
