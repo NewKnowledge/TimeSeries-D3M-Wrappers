@@ -11,7 +11,7 @@ from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
-from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
+from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, denormalize
 
 from .timeseries_formatter import TimeSeriesFormatterPrimitive
 
@@ -184,11 +184,16 @@ if __name__ == '__main__':
     
     # Load data and preprocessing
     input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
+    hyperparams_class = denormalize.DenormalizePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    denorm = denormalize.DenormalizePrimitive(hyperparams = hyperparams_class.defaults())
+    input_dataset = denorm.produce(inputs = input_dataset).value
+
     hyperparams_class = Storc.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     storc_client = Storc(hyperparams = hyperparams_class.defaults().replace({'algorithm':'TimeSeriesKMeans','nclusters':4}))
     storc_client.set_training_data(inputs = input_dataset, outputs = None)
     storc_client.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
+    test_dataset = denorm.produce(inputs = input_dataset).value
     results = storc_client.produce(inputs = test_dataset)
     print(results.value)
     
