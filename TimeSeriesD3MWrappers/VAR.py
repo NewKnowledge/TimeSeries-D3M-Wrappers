@@ -329,7 +329,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """
 
         # sort test dataset by datetime_filter and filter_index if they exist to get correct ordering of d3mIndex
-        if self.ds_filter is None and self.filter_idx is None:
+        if self.ds_filter is not None and self.filter_idx is not None:
             inputs = inputs.sort_values(by = [self.ds_filter, self.filter_idx])
         elif self.hyperparams['datetime_filter']:
             inputs = inputs.sort_values(by = self.ds_filter)
