@@ -274,8 +274,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # create unique_index column if other indices
         unique_index = inputs['temp_time_index']
-        if self.hyperparams['filter_index_two'] is not None:
-            unique_index = unique_index.astype(str).str.cat(inputs.iloc[:, self.hyperparams['filter_index_two']].astype(str))
+        if self.hyperparams['filter_index_one'] is not None:
+            unique_index = unique_index.astype(str).str.cat(inputs.d3mIndex.astype(str))
 
         # drop original categorical variables, index key, and times
         inputs.set_index('temp_time_index', inplace=True)
