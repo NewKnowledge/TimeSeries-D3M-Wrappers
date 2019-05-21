@@ -475,43 +475,60 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     
 if __name__ == '__main__':
     
-    '''
-    # stock_market test case
-    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TRAIN/dataset_TRAIN/datasetDoc.json')
+    
+    # # stock_market test case
+    # input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TRAIN/dataset_TRAIN/datasetDoc.json')
+    # hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    # ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+    # df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
+    
+    # # VAR primitive
+    # var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    # var = VAR(hyperparams = var_hp.defaults().replace({'datetime_index':[3,2],'filter_index_two':1, 'filter_index_one':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
+    # var.set_training_data(inputs = df, outputs = None)
+    # var.fit()
+    # test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
+    # results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
+    # #results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
+    # print(results.value)
+    
+
+    # # acled reduced test case
+    # input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL0_acled_reduced/TRAIN/dataset_TRAIN/datasetDoc.json')
+    # hyperparams_class = dataset_remove_columns.RemoveColumnsPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    # to_remove = (1, 2, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30)
+    # rm_client = dataset_remove_columns.RemoveColumnsPrimitive(hyperparams = hyperparams_class.defaults().replace({"columns":to_remove}))
+    # df = rm_client.produce(inputs = input_dataset).value
+
+    # hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    # ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+    # df = ds2df_client.produce(inputs = df).value
+    # print(df.head())
+
+    # var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+    # var = VAR(hyperparams = var_hp.defaults().replace({}))
+    # var.set_training_data(inputs = df, outputs = None)
+    # var.fit()
+    # test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL0_acled_reduced/TEST/dataset_TEST/datasetDoc.json')
+    # #results = var.produce(inputs = ds2df_client.produce(inputs = rm_client.produce(inputs = test_dataset).value).value)
+    # results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
+    # print(results.value)
+
+
+    # population_spawn test case
+    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_population_spawn_simpler/TRAIN/dataset_TRAIN/datasetDoc.json')
     hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
     ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
     df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
     
     # VAR primitive
     var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'datetime_index':[3,2],'filter_index_two':1, 'filter_index_one':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
+    var = VAR(hyperparams = var_hp.defaults().replace({'filter_index_two':1, 'filter_index_one':2, 'n_periods':25, 'interval':25, 'datetime_index_unit':'D'}))
     var.set_training_data(inputs = df, outputs = None)
     var.fit()
-    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
+    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_population_spawn_simpler/TEST/dataset_TEST/datasetDoc.json')
     results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     #results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    print(results.value)
-    '''
-
-    # acled reduced test case
-    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL0_acled_reduced/TRAIN/dataset_TRAIN/datasetDoc.json')
-    hyperparams_class = dataset_remove_columns.RemoveColumnsPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    to_remove = (1, 2, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30)
-    rm_client = dataset_remove_columns.RemoveColumnsPrimitive(hyperparams = hyperparams_class.defaults().replace({"columns":to_remove}))
-    df = rm_client.produce(inputs = input_dataset).value
-
-    hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-    df = ds2df_client.produce(inputs = df).value
-    print(df.head())
-
-    var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({}))
-    var.set_training_data(inputs = df, outputs = None)
-    var.fit()
-    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL0_acled_reduced/TEST/dataset_TEST/datasetDoc.json')
-    #results = var.produce(inputs = ds2df_client.produce(inputs = rm_client.produce(inputs = test_dataset).value).value)
-    results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
     print(results.value)
     
 
