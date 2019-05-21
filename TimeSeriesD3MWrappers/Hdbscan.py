@@ -45,7 +45,8 @@ class Hyperparams(hyperparams.Hyperparams):
 
 class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
     '''
-    Produce primitive's best guess for the cluster number of each series.
+        Produce primitive's best guess for the cluster number of each series using Hierarchical Density-Based 
+        Clustering or Density-Based Clustering.
     '''
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".
