@@ -138,13 +138,13 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
             raise exceptions.InvalidArgumentValueError('no main resource specified')
 
         file_index = self.hyperparams['file_col_index']
-        if file_index is not None:
-            if not self._is_csv_file_column(inputs.metadata, main_resource_index, file_index):
-                raise exceptions.InvalidArgumentValueError('column idx=' + str(file_index) + ' from does not contain csv file names')
-        else:
-            file_index = self._find_csv_file_column(inputs.metadata)
-            if file_index is None:
-                raise exceptions.InvalidArgumentValueError('no column from contains csv file names')
+        # if file_index is not None:
+        #     if not self._is_csv_file_column(inputs.metadata, main_resource_index, file_index):
+        #         raise exceptions.InvalidArgumentValueError('column idx=' + str(file_index) + ' from does not contain csv file names')
+        # else:
+        #     file_index = self._find_csv_file_column(inputs.metadata)
+        #     if file_index is None:
+        #         raise exceptions.InvalidArgumentValueError('no column from contains csv file names')
 
         # generate the long form timeseries data
         base_path = self._get_base_path(inputs.metadata, main_resource_index, file_index)
@@ -162,12 +162,12 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
                    res_id: str,
                    column_index: int) -> str:
         # get the base uri from the referenced column
-        column_metadata = inputs_metadata.query((res_id, metadata_base.ALL_ELEMENTS, column_index))
+        return inputs_metadata.query((res_id, metadata_base.ALL_ELEMENTS, column_index))['location_base_uris'][0]
 
-        ref_col_index = column_metadata['foreign_key']['column_index']
-        ref_res_id = column_metadata['foreign_key']['resource_id']
+        # ref_col_index = column_metadata['foreign_key']['column_index']
+        # ref_res_id = column_metadata['foreign_key']['resource_id']
 
-        return inputs_metadata.query((ref_res_id, metadata_base.ALL_ELEMENTS, ref_col_index))['location_base_uris'][0]
+        # return inputs_metadata.query((ref_res_id, metadata_base.ALL_ELEMENTS, ref_col_index))['location_base_uris'][0]
 
     def _get_ref_resource(self,
                    inputs_metadata: metadata_base.DataMetadata,
