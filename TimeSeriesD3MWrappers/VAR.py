@@ -305,6 +305,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         vals = [pandas.concat(company, axis=1) for company in interpolated]
         self._X_train = vals
 
+        # update hyperparams
+        colnames = list(inputs)
+        if self.hyperparams['datetime_filter'] is not None:
+            self.hyperparams['datetime_filter'] == np.where(ds_filter == colnames)
+        if self.hyperparams['filter_index'] is not None:
+            self.hyperparams['filter_index'] == np.where(filter_idx == colnames)
+
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
         """
