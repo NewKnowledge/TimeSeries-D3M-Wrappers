@@ -20,7 +20,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 __author__ = 'Distil'
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 __contact__ = 'mailto:nklabs@newknowledge.com'
 
 
