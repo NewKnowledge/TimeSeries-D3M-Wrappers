@@ -3,6 +3,7 @@ from common_primitives import dataset_to_dataframe as DatasetToDataFrame
 from d3m import container
 from d3m.primitives.time_series_forecasting.vector_autoregression import VAR
 from Sloth.predict import Arima
+from d3m.container import DataFrame as d3m_DataFrame
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -11,6 +12,7 @@ input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/L
 hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
 ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
 df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
+original = df.copy()
 
 # apply VAR to predict each species in each sector
 n_periods = 25
@@ -20,33 +22,32 @@ var.set_training_data(inputs = df, outputs = None)
 var.fit()
 test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_population_spawn_simpler/TEST/dataset_TEST/datasetDoc.json')
 test_df = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value)
-test_df.set_index('d3mIndex')
+test_df = test_df.drop(columns = 'count')
 var_pred = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value)).value
-var_pred.set_index('d3mIndex')
-var_pred = var_pred.join(test_df)
+var_pred = var_pred.merge(test_df, on = 'd3mIndex', how='left')
 
 # load targets data
 targets = pd.read_csv('file:///datasets/seed_datasets_current/LL1_736_population_spawn_simpler/SCORE/targets.csv')
-targets.set_index('d3mIndex')
-targets = targets.join(test_df)
+test_df['d3mIndex'] = test_df['d3mIndex'].astype(int)
+targets = targets.merge(test_df,on = 'd3mIndex', how = 'left')
 
 # compare VAR predictions to ARIMA predictions
 sector = 'S_3102'
-species = ['cas9_VBBA']#, 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE']
-original = df[df['sector'] == sector]
+species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE']
+original = original[original['sector'] == sector]
 var_pred = var_pred[var_pred['sector'] == sector]
-targets = var_pred[var_pred]['sector'] == sector]
+targets = var_pred[var_pred['sector'] == sector]
 
 # instantiate arima primitive
 clf = Arima(True)
 
 for specie in species:
     
-    x_train = original[original['species'] == specie]['day'].values
-    train = original[original['species'] == specie]['count'].values
-    v_pred = var_pred[var_pred['species'] == specie]['count'].values
-    true = targets[targets['species'] == specie]['count'].values
-    x_pred = var_pred[var_pred['species'] == specie]['day'].values
+    x_train = original[original['species'] == specie]['day'].values.astype(int)
+    train = original[original['species'] == specie]['count'].values.astype(float)
+    v_pred = var_pred[var_pred['species'] == specie]['count'].values.astype(float)
+    true = targets[targets['species'] == specie]['count'].values.astype(float)
+    x_pred = var_pred[var_pred['species'] == specie]['day'].values.astype(int)
 
     clf.fit(train)
     a_pred = clf.predict(n_periods)[-1:]
@@ -55,12 +56,13 @@ for specie in species:
     plt.clf()
     plt.scatter(x_train, train, c = 'blue', label = 'true values')
     plt.scatter(x_pred, true, c = 'blue', label = 'true values')
-    plt.scatter(x_pred, v_pred, c = 'green', label = 'VAR prediction')
-    plt.scatter(x_pred, a_pred, c = 'red', label = 'ARIMA prediction')
+    plt.scatter(x_pred, v_pred, c = 'green', label = 'VAR prediction', alpha = 0.5)
+    plt.scatter(x_pred, a_pred, c = 'red', label = 'ARIMA prediction', alpha = 0.5)
     plt.xlabel('Days of the Year')
     plt.ylabel('Species Count')
     plt.title(f'VAR vs. ARIMA Comparison on Species {specie} in Sector {sector}')
-    plt.show()
+    plt.legend()
+    plt.savefig(f'{specie}.png')
 
 
 
