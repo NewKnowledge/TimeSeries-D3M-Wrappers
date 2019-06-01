@@ -14,7 +14,7 @@ from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
-from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, dataset_regex_filter, dataset_remove_columns
+from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame 
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
