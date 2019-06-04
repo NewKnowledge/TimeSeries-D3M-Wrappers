@@ -31,38 +31,69 @@ targets = pd.read_csv('file:///datasets/seed_datasets_current/LL1_736_population
 test_df['d3mIndex'] = test_df['d3mIndex'].astype(int)
 targets = targets.merge(test_df,on = 'd3mIndex', how = 'left')
 
-# compare VAR predictions to ARIMA predictions
-sector = 'S_3102'
-species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE']
-original = original[original['sector'] == sector]
-var_pred = var_pred[var_pred['sector'] == sector]
-targets = var_pred[var_pred['sector'] == sector]
+# # compare VAR predictions to ARIMA predictions for individual species / sectors
+# sector = 'S_3102'
+# species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE']
+# original = original[original['sector'] == sector]
+# var_pred = var_pred[var_pred['sector'] == sector]
+# targets = var_pred[var_pred['sector'] == sector]
 
-# instantiate arima primitive
-clf = Arima(True)
+# # instantiate arima primitive
+# clf = Arima(True)
 
-for specie in species:
+# for specie in species:
     
-    x_train = original[original['species'] == specie]['day'].values.astype(int)
-    train = original[original['species'] == specie]['count'].values.astype(float)
-    v_pred = var_pred[var_pred['species'] == specie]['count'].values.astype(float)
-    true = targets[targets['species'] == specie]['count'].values.astype(float)
-    x_pred = var_pred[var_pred['species'] == specie]['day'].values.astype(int)
+#     x_train = original[original['species'] == specie]['day'].values.astype(int)
+#     train = original[original['species'] == specie]['count'].values.astype(float)
+#     v_pred = var_pred[var_pred['species'] == specie]['count'].values.astype(float)
+#     true = targets[targets['species'] == specie]['count'].values.astype(float)
+#     x_pred = var_pred[var_pred['species'] == specie]['day'].values.astype(int)
 
-    clf.fit(train)
-    a_pred = clf.predict(n_periods)[-1:]
+#     clf.fit(train)
+#     a_pred = clf.predict(n_periods)[-1:]
 
-    # plot results
+#     # plot results
+#     plt.clf()
+#     plt.scatter(x_train, train, c = 'blue', label = 'true values')
+#     plt.scatter(x_pred, true, c = 'blue', label = 'true values')
+#     plt.scatter(x_pred, v_pred, c = 'green', label = 'VAR prediction', alpha = 0.5)
+#     plt.scatter(x_pred, a_pred, c = 'red', label = 'ARIMA prediction', alpha = 0.5)
+#     plt.xlabel('Days of the Year')
+#     plt.ylabel('Species Count')
+#     plt.title(f'VAR vs. ARIMA Comparison on Species {specie} in Sector {sector}')
+#     plt.legend()
+#     plt.savefig(f'{specie}.png')
+
+# compare VAR predictions to ARIMA for each specie in sector
+clf = Arima(True)
+sectors = ['S_3102', 'S_4102']
+species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE', 'cas9_HNAF', 'cas9_NIAG', 'cas9_MBI']
+
+for sector in sectors:
     plt.clf()
-    plt.scatter(x_train, train, c = 'blue', label = 'true values')
-    plt.scatter(x_pred, true, c = 'blue', label = 'true values')
-    plt.scatter(x_pred, v_pred, c = 'green', label = 'VAR prediction', alpha = 0.5)
-    plt.scatter(x_pred, a_pred, c = 'red', label = 'ARIMA prediction', alpha = 0.5)
-    plt.xlabel('Days of the Year')
-    plt.ylabel('Species Count')
-    plt.title(f'VAR vs. ARIMA Comparison on Species {specie} in Sector {sector}')
+    original = original[original['sector'] == sector]
+    var_pred = var_pred[var_pred['sector'] == sector]
+    targets = var_pred[var_pred['sector'] == sector]  
+
+    for specie in species:
+        train = original[original['species'] == specie]['count'].values.astype(float)
+        v_pred = var_pred[var_pred['species'] == specie]['count'].values.astype(float)
+        ground_truth = targets[targets['species'] == specie]['count'].values.astype(float)
+        clf.fit(train)
+        a_pred = clf.predict(n_periods)[-1:]
+
+        # plot results
+        plt.scatter(specie, ground_truth, c = 'blue', s = 6, label = 'ground truth')
+        plt.scatter(specie, v_pred, c = 'green', label = 'VAR prediction', alpha = 0.5)
+        plt.scatter(specie, a_pred, c = 'red', label = 'ARIMA prediction', alpha = 0.5)
+    
+    plt.xlabel(f'Species in Sector {sector}')
+    plt.ylabel('Population Prediction')
+    plt.title(f'VAR vs. ARIMA Comparison on Species in Sector {sector}')
     plt.legend()
-    plt.savefig(f'{specie}.png')
+    plt.savefig(f'{sector}.png')
+
+
 
 
 
