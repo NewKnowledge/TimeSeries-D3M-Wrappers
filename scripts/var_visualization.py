@@ -7,6 +7,7 @@ from d3m.container import DataFrame as d3m_DataFrame
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
+import numpy as np
 from collections import OrderedDict
 from sklearn.metrics import mean_absolute_error as mae
 # dataset to dataframe
@@ -72,29 +73,44 @@ clf = Arima(True)
 #species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE', 'cas9_HNAF', 'cas9_NIAG', 'cas9_MBI']
 
 COLORS = ["#FA5655", "#F79690", "#B9BC2D", "#86B6B2", "#955B99", "#252B7A"]
-for sector in targets['sector'].unique():
+for sector in targets['sector'].unique()[15:30]:
     original_1 = original[original['sector'] == sector]
     var_pred_1 = var_pred[var_pred['sector'] == sector]
-    print(var_pred_1)
-    targets_1 = targets[targets['sector'] == sector]
+    targets_1 = targets[targets['sector'] == sector].sort_values(by='species')
+    print(var_pred_1['count'].values)
+    print(var_pred_1.head())
+    print(targets_1['count'].values)
+    print(targets_1.head())
 
     # arima prediction on each species in sector
     a_pred = []
-    for specie in targets_1['species'].unique():
+    print(f'a_pred: {a_pred}')
+    print(np.sort(targets_1['species'].unique()))
+    for specie in np.sort(targets_1['species'].unique()):
         train = original_1[original_1['species'] == specie]['count'].values.astype(float)
         clf.fit(train)
-        a_pred = a_pred.append(clf.predict(n_periods)[-1:])
-
-    print(f'mae: {mae(targets_1, a_pred)}')
-    plt.scatter(sector, mae(targets_1, a_pred), c = COLORS[0], label = 'MAE of ARIMA prediction')
-    plt.scatter(sector, mae(targets_1, v_pred_1), c = COLORS[1], label = 'MAE of VAR prediction')
+        a_pred.append(clf.predict(n_periods)[-1:][0])
+    
+    ap = mae(targets_1['count'].values, a_pred)
+    vp = mae(targets_1['count'].values, var_pred_1['count'].values)
+    linewidth = '1' if vp <= ap else '0'
+    print(f"arima: {mae(targets_1['count'].values, a_pred)}")
+    print(f"var: {mae(targets_1['count'].values, var_pred_1['count'].values)}")
+    plt.scatter(sector, mae(targets_1['count'].values, a_pred), c = COLORS[0], label = 'MAE of ARIMA prediction')
+    if linewidth == '0':
+        plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2], label = 'MAE of VAR prediction')
+    else:
+        plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2])
 plt.xlabel(f'Sector')
-plt.ylabel('MAE')
-plt.title(f'VAR vs. ARIMA MAE Comparison for Each Sector')
+plt.xticks(rotation = 45)
+plt.ylabel('Mean Absolute Error')
+plt.title(f'VAR vs. ARIMA Prediction on Population Spawn Dataset')
 handles, labels = plt.gca().get_legend_handles_labels()
 by_label = OrderedDict(zip(labels, handles))
 plt.legend(by_label.values(), by_label.keys())
-plt.savefig(f'mae_comp.png')
+plt.tight_layout()
+plt.savefig(f'mae_comp_1.png')
+
 
 
 
