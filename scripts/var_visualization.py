@@ -66,38 +66,35 @@ targets = targets.merge(test_df,on = 'd3mIndex', how = 'left')
 #     plt.legend()
 #     plt.savefig(f'{specie}.png')
 
-# compare VAR predictions to ARIMA for each specie in sector
+# compare VAR predictions to ARIMA for each sector
 clf = Arima(True)
-sectors = ['S_3102', 'S_4102', 'S_5102']
-species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE', 'cas9_HNAF', 'cas9_NIAG', 'cas9_MBI']
+#sectors = ['S_3102', 'S_4102', 'S_5102']
+#species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE', 'cas9_HNAF', 'cas9_NIAG', 'cas9_MBI']
 
-for sector in sectors:
-    plt.clf()
+COLORS = ["#FA5655", "#F79690", "#B9BC2D", "#86B6B2", "#955B99", "#252B7A"]
+for sector in targets['sector'].unique():
     original_1 = original[original['sector'] == sector]
     var_pred_1 = var_pred[var_pred['sector'] == sector]
-    targets_1 = targets[targets['sector'] == sector]  
+    print(var_pred_1)
+    targets_1 = targets[targets['sector'] == sector]
 
-    for specie in species:
+    # arima prediction on each species in sector
+    a_pred = []
+    for specie in targets_1['species'].unique():
         train = original_1[original_1['species'] == specie]['count'].values.astype(float)
-        v_pred = var_pred_1[var_pred_1['species'] == specie]['count'].values.astype(float)
-        ground_truth = targets_1[targets_1['species'] == specie]['count'].values.astype(float)
         clf.fit(train)
-        a_pred = clf.predict(n_periods)[-1:]
+        a_pred = a_pred.append(clf.predict(n_periods)[-1:])
 
-        # plot results
-        #plt.scatter(specie, maeground_truth), c = 'blue', s = 8, label = 'ground truth')
-        print(f'ground_truth: {ground_truth}')
-        print(f'arima: {a_pred}')
-        print(f'var: {v_pred}')
-        plt.scatter(specie, mae(ground_truth, a_pred), c = 'red', label = 'MAE of ARIMA prediction', alpha = 0.5)
-        plt.scatter(specie, mae(ground_truth, v_pred), c = 'green', label = 'MAE of VAR prediction', alpha = 0.5)
-    plt.xlabel(f'Species in Sector {sector}')
-    plt.ylabel('MAE of Predictions')
-    plt.title(f'VAR vs. ARIMA Comparison on Species in Sector {sector}')
-    handles, labels = plt.gca().get_legend_handles_labels()
-    by_label = OrderedDict(zip(labels, handles))
-    plt.legend(by_label.values(), by_label.keys())
-    plt.savefig(f'{sector}.png')
+    print(f'mae: {mae(targets_1, a_pred)}')
+    plt.scatter(sector, mae(targets_1, a_pred), c = COLORS[0], label = 'MAE of ARIMA prediction')
+    plt.scatter(sector, mae(targets_1, v_pred_1), c = COLORS[1], label = 'MAE of VAR prediction')
+plt.xlabel(f'Sector')
+plt.ylabel('MAE')
+plt.title(f'VAR vs. ARIMA MAE Comparison for Each Sector')
+handles, labels = plt.gca().get_legend_handles_labels()
+by_label = OrderedDict(zip(labels, handles))
+plt.legend(by_label.values(), by_label.keys())
+plt.savefig(f'mae_comp.png')
 
 
 
