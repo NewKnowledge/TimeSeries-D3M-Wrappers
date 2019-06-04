@@ -6,7 +6,9 @@ from Sloth.predict import Arima
 from d3m.container import DataFrame as d3m_DataFrame
 import pandas as pd
 import matplotlib.pyplot as plt
-
+import math
+from collections import OrderedDict
+from sklearn.metrics import mean_absolute_error as mae
 # dataset to dataframe
 input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_population_spawn_simpler/TRAIN/dataset_TRAIN/datasetDoc.json')
 hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
@@ -36,7 +38,7 @@ targets = targets.merge(test_df,on = 'd3mIndex', how = 'left')
 # species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE']
 # original = original[original['sector'] == sector]
 # var_pred = var_pred[var_pred['sector'] == sector]
-# targets = var_pred[var_pred['sector'] == sector]
+# targets = targets[targets['sector'] == sector]
 
 # # instantiate arima primitive
 # clf = Arima(True)
@@ -66,31 +68,35 @@ targets = targets.merge(test_df,on = 'd3mIndex', how = 'left')
 
 # compare VAR predictions to ARIMA for each specie in sector
 clf = Arima(True)
-sectors = ['S_3102', 'S_4102']
+sectors = ['S_3102', 'S_4102', 'S_5102']
 species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE', 'cas9_HNAF', 'cas9_NIAG', 'cas9_MBI']
 
 for sector in sectors:
     plt.clf()
-    original = original[original['sector'] == sector]
-    var_pred = var_pred[var_pred['sector'] == sector]
-    targets = var_pred[var_pred['sector'] == sector]  
+    original_1 = original[original['sector'] == sector]
+    var_pred_1 = var_pred[var_pred['sector'] == sector]
+    targets_1 = targets[targets['sector'] == sector]  
 
     for specie in species:
-        train = original[original['species'] == specie]['count'].values.astype(float)
-        v_pred = var_pred[var_pred['species'] == specie]['count'].values.astype(float)
-        ground_truth = targets[targets['species'] == specie]['count'].values.astype(float)
+        train = original_1[original_1['species'] == specie]['count'].values.astype(float)
+        v_pred = var_pred_1[var_pred_1['species'] == specie]['count'].values.astype(float)
+        ground_truth = targets_1[targets_1['species'] == specie]['count'].values.astype(float)
         clf.fit(train)
         a_pred = clf.predict(n_periods)[-1:]
 
         # plot results
-        plt.scatter(specie, ground_truth, c = 'blue', s = 6, label = 'ground truth')
-        plt.scatter(specie, v_pred, c = 'green', label = 'VAR prediction', alpha = 0.5)
-        plt.scatter(specie, a_pred, c = 'red', label = 'ARIMA prediction', alpha = 0.5)
-    
+        #plt.scatter(specie, maeground_truth), c = 'blue', s = 8, label = 'ground truth')
+        print(f'ground_truth: {ground_truth}')
+        print(f'arima: {a_pred}')
+        print(f'var: {v_pred}')
+        plt.scatter(specie, mae(ground_truth, a_pred), c = 'red', label = 'MAE of ARIMA prediction', alpha = 0.5)
+        plt.scatter(specie, mae(ground_truth, v_pred), c = 'green', label = 'MAE of VAR prediction', alpha = 0.5)
     plt.xlabel(f'Species in Sector {sector}')
-    plt.ylabel('Population Prediction')
+    plt.ylabel('MAE of Predictions')
     plt.title(f'VAR vs. ARIMA Comparison on Species in Sector {sector}')
-    plt.legend()
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = OrderedDict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
     plt.savefig(f'{sector}.png')
 
 
