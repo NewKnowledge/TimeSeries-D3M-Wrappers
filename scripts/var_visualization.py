@@ -34,82 +34,82 @@ targets = pd.read_csv('file:///datasets/seed_datasets_current/LL1_736_population
 test_df['d3mIndex'] = test_df['d3mIndex'].astype(int)
 targets = targets.merge(test_df,on = 'd3mIndex', how = 'left')
 
-# # compare VAR predictions to ARIMA predictions for individual species / sectors
-# sector = 'S_3102'
-# species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE']
-# original = original[original['sector'] == sector]
-# var_pred = var_pred[var_pred['sector'] == sector]
-# targets = targets[targets['sector'] == sector]
+# compare VAR predictions to ARIMA predictions for individual species / sectors
+sector = 'S_0002'
+species = ['cas9_YABE', 'cas9_MBI']
+original = original[original['sector'] == sector]
+var_pred = var_pred[var_pred['sector'] == sector]
+targets = targets[targets['sector'] == sector]
 
-# # instantiate arima primitive
-# clf = Arima(True)
-
-# for specie in species:
-    
-#     x_train = original[original['species'] == specie]['day'].values.astype(int)
-#     train = original[original['species'] == specie]['count'].values.astype(float)
-#     v_pred = var_pred[var_pred['species'] == specie]['count'].values.astype(float)
-#     true = targets[targets['species'] == specie]['count'].values.astype(float)
-#     x_pred = var_pred[var_pred['species'] == specie]['day'].values.astype(int)
-
-#     clf.fit(train)
-#     a_pred = clf.predict(n_periods)[-1:]
-
-#     # plot results
-#     plt.clf()
-#     plt.scatter(x_train, train, c = 'blue', label = 'true values')
-#     plt.scatter(x_pred, true, c = 'blue', label = 'true values')
-#     plt.scatter(x_pred, v_pred, c = 'green', label = 'VAR prediction', alpha = 0.5)
-#     plt.scatter(x_pred, a_pred, c = 'red', label = 'ARIMA prediction', alpha = 0.5)
-#     plt.xlabel('Days of the Year')
-#     plt.ylabel('Species Count')
-#     plt.title(f'VAR vs. ARIMA Comparison on Species {specie} in Sector {sector}')
-#     plt.legend()
-#     plt.savefig(f'{specie}.png')
-
-# compare VAR predictions to ARIMA for each sector
+# instantiate arima primitive
 clf = Arima(True)
-#sectors = ['S_3102', 'S_4102', 'S_5102']
-#species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE', 'cas9_HNAF', 'cas9_NIAG', 'cas9_MBI']
-
 COLORS = ["#FA5655", "#F79690", "#B9BC2D", "#86B6B2", "#955B99", "#252B7A"]
-for sector in targets['sector'].unique()[15:30]:
-    original_1 = original[original['sector'] == sector]
-    var_pred_1 = var_pred[var_pred['sector'] == sector]
-    targets_1 = targets[targets['sector'] == sector].sort_values(by='species')
-    print(var_pred_1['count'].values)
-    print(var_pred_1.head())
-    print(targets_1['count'].values)
-    print(targets_1.head())
-
-    # arima prediction on each species in sector
-    a_pred = []
-    print(f'a_pred: {a_pred}')
-    print(np.sort(targets_1['species'].unique()))
-    for specie in np.sort(targets_1['species'].unique()):
-        train = original_1[original_1['species'] == specie]['count'].values.astype(float)
-        clf.fit(train)
-        a_pred.append(clf.predict(n_periods)[-1:][0])
+for specie in species:
     
-    ap = mae(targets_1['count'].values, a_pred)
-    vp = mae(targets_1['count'].values, var_pred_1['count'].values)
-    linewidth = '1' if vp <= ap else '0'
-    print(f"arima: {mae(targets_1['count'].values, a_pred)}")
-    print(f"var: {mae(targets_1['count'].values, var_pred_1['count'].values)}")
-    plt.scatter(sector, mae(targets_1['count'].values, a_pred), c = COLORS[0], label = 'MAE of ARIMA prediction')
-    if linewidth == '0':
-        plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2], label = 'MAE of VAR prediction')
-    else:
-        plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2], label = 'VAR prediction better than ARIMA prediction')
-plt.xlabel(f'Sector')
-plt.xticks(rotation = 45)
-plt.ylabel('Mean Absolute Error')
-plt.title(f'VAR vs. ARIMA Prediction on Population Spawn Dataset')
-handles, labels = plt.gca().get_legend_handles_labels()
-by_label = OrderedDict(zip(labels, handles))
-plt.legend(by_label.values(), by_label.keys())
-plt.tight_layout()
-plt.savefig(f'mae_comp_1.png')
+    x_train = original[original['species'] == specie]['day'].values.astype(int)
+    train = original[original['species'] == specie]['count'].values.astype(float)
+    v_pred = var_pred[var_pred['species'] == specie]['count'].values.astype(float)
+    true = targets[targets['species'] == specie]['count'].values.astype(float)
+    x_pred = var_pred[var_pred['species'] == specie]['day'].values.astype(int)
+
+    clf.fit(train)
+    a_pred = clf.predict(n_periods)[-1:]
+
+    # plot results
+    plt.clf()
+    plt.scatter(x_train, train, c = COLORS[3], label = 'training data')
+    plt.scatter(x_pred, true, c = COLORS[3], label = 'ground truth prediction')
+    plt.scatter(x_pred, v_pred, c = COLORS[2], label = 'VAR prediction', edgecolor = 'black', linewidth = 1)
+    plt.scatter(x_pred, a_pred, c = COLORS[0], label = 'ARIMA prediction',  edgecolor = 'black', linewidth = 1)
+    plt.xlabel('Day of the Year')
+    plt.ylabel('Population')
+    plt.title(f'VAR vs. ARIMA Comparison for Prediction of Species {specie} in Sector {sector}')
+    plt.legend()
+    plt.savefig(f'{specie}.png')
+
+# # compare VAR predictions to ARIMA for each sector
+# clf = Arima(True)
+# #sectors = ['S_3102', 'S_4102', 'S_5102']
+# #species = ['cas9_VBBA', 'cas9_FAB', 'cas9_JAC', 'cas9_CAD', 'cas9_YABE', 'cas9_HNAF', 'cas9_NIAG', 'cas9_MBI']
+
+# COLORS = ["#FA5655", "#F79690", "#B9BC2D", "#86B6B2", "#955B99", "#252B7A"]
+# for sector in targets['sector'].unique()[15:30]:
+#     original_1 = original[original['sector'] == sector]
+#     var_pred_1 = var_pred[var_pred['sector'] == sector]
+#     targets_1 = targets[targets['sector'] == sector].sort_values(by='species')
+#     print(var_pred_1['count'].values)
+#     print(var_pred_1.head())
+#     print(targets_1['count'].values)
+#     print(targets_1.head())
+
+#     # arima prediction on each species in sector
+#     a_pred = []
+#     print(f'a_pred: {a_pred}')
+#     print(np.sort(targets_1['species'].unique()))
+#     for specie in np.sort(targets_1['species'].unique()):
+#         train = original_1[original_1['species'] == specie]['count'].values.astype(float)
+#         clf.fit(train)
+#         a_pred.append(clf.predict(n_periods)[-1:][0])
+    
+#     ap = mae(targets_1['count'].values, a_pred)
+#     vp = mae(targets_1['count'].values, var_pred_1['count'].values)
+#     linewidth = '1' if vp <= ap else '0'
+#     print(f"arima: {mae(targets_1['count'].values, a_pred)}")
+#     print(f"var: {mae(targets_1['count'].values, var_pred_1['count'].values)}")
+#     plt.scatter(sector, mae(targets_1['count'].values, a_pred), c = COLORS[0], label = 'MAE of ARIMA prediction')
+#     if linewidth == '0':
+#         plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2], label = 'MAE of VAR prediction')
+#     else:
+#         plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2], label = 'VAR prediction better than ARIMA prediction')
+# plt.xlabel(f'Sector')
+# plt.xticks(rotation = 45)
+# plt.ylabel('Mean Absolute Error')
+# plt.title(f'VAR vs. ARIMA Prediction on Population Spawn Dataset')
+# handles, labels = plt.gca().get_legend_handles_labels()
+# by_label = OrderedDict(zip(labels, handles))
+# plt.legend(by_label.values(), by_label.keys())
+# plt.tight_layout()
+# plt.savefig(f'mae_comp_1.png')
 
 
 
