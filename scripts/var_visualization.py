@@ -100,7 +100,7 @@ for sector in targets['sector'].unique()[15:30]:
     if linewidth == '0':
         plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2], label = 'MAE of VAR prediction')
     else:
-        plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2])
+        plt.scatter(sector, mae(targets_1['count'].values, var_pred_1['count'].values), edgecolor = 'black', linewidth = linewidth, c = COLORS[2], label = 'VAR prediction better than ARIMA prediction')
 plt.xlabel(f'Sector')
 plt.xticks(rotation = 45)
 plt.ylabel('Mean Absolute Error')
