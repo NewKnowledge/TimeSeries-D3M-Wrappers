@@ -54,9 +54,13 @@ class Hyperparams(hyperparams.Hyperparams):
 
 class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     '''
-    Produce primitive's classifications for new time series data The input is a numpy ndarray of 
-    size (number_of_time_series, time_series_length, dimension) containing new time series. 
-    The output is a numpy ndarray containing a predicted class for each of the input time series.
+        Primitive that applies the shapelet classification algorithm to time series data. The shapelet 
+        classification algorithm was introduced by Grabocka et al. in 
+        https://www.ismll.uni-hildesheim.de/pub/pdfs/grabocka2014e-kdd.pdf and learns discriminative subsequences 
+        ("shapes") that can be used to classify series.
+    
+        Training inputs: D3M dataset with features and labels, and D3M indices
+        Outputs: D3M dataset with predicted labels and D3M indices
     '''
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".

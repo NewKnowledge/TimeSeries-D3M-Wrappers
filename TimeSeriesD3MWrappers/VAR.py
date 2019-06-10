@@ -88,10 +88,15 @@ class Hyperparams(hyperparams.Hyperparams):
 
 class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
-        Produce primitive's prediction for future time series data. The output is a data frame containing the d3m index and a 
-        forecast for each of the 'n_periods' future time periods, modified if desired by the 'interval' HP. The default is a 
-        future forecast for each of the selected input variables. This can be modified to just one output variable with 
-        the associated HP
+        Primitive that applies a VAR multivariate forecasting model to time series data. The VAR 
+        implementation comes from the statsmodels library. The primitive is implemented with a number 
+        of hyperparameters to handle hierarchical indices and forecasting various timelines and 
+        intervals into the future. 
+    
+        Training inputs: D3M dataset with multivariate time series (potentially structured according to
+                                     hierarchical indices) and a time series index column. 
+        Outputs: D3M dataset with predicted observations for a length of 'n_periods' at a certain 'interval' 
+                 into the future
     """
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".

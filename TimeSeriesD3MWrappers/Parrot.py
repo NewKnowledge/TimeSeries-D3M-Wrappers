@@ -42,9 +42,13 @@ class Hyperparams(hyperparams.Hyperparams):
 
 class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     '''
-    Produce the primitive's prediction for future time series data. The output 
-    is a list of length 'n_periods' that contains a prediction for each of 'n_periods' 
-    future time periods. 'n_periods' is a hyperparameter that must be set before making the prediction.
+        Primitive that applies an ARIMA forecasting model to time series data. The AR and MA terms
+        of the ARIMA model are automatically selected and stationarity is induced before fitting 
+        the model.
+    
+        Training inputs: D3M dataset with training time series observations and a time series index
+                         column
+        Outputs: D3M dataset with predicted observations for a length of 'n_periods' in the future
     '''
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".

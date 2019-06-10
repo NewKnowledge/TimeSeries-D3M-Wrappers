@@ -37,9 +37,11 @@ class Hyperparams(hyperparams.Hyperparams):
 
 class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     '''
-    Produce primitive's classifications for new time series data. The input is a numpy ndarray of 
-    size (number_of_time_series, time_series_length) containing new time series. 
-    The output is a numpy ndarray containing a predicted class for each of the input time series.
+        Primitive that applies the k nearest neighbor classification algorithm to time series data. 
+        The tslearn KNeighborsTimeSeriesClassifier implementation is wrapped.
+    
+        Training inputs: D3M dataset with features and labels, and D3M indices
+        Outputs: D3M dataset with predicted labels and D3M indices
     '''
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".

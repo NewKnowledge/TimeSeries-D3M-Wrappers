@@ -45,8 +45,12 @@ class Hyperparams(hyperparams.Hyperparams):
 
 class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
     '''
-        Produce primitive's best guess for the cluster number of each series using Hierarchical Density-Based 
-        Clustering or Density-Based Clustering.
+        Primitive that applies Hierarchical Density-Based Clustering or Density-Based Clustering 
+        algorithms to time series data. This is an unsupervised, clustering primitive, but has been
+        shoehorned into a supervised classification problem to produce a compliant primitive. 
+
+        Training inputs: D3M dataset with features and labels, and D3M indices
+        Outputs: D3M dataset with predicted labels and D3M indices
     '''
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".
