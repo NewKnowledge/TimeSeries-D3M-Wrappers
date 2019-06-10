@@ -47,7 +47,7 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
     '''
         Primitive that applies Hierarchical Density-Based Clustering or Density-Based Clustering 
         algorithms to time series data. This is an unsupervised, clustering primitive, but has been
-        shoehorned into a supervised classification problem to produce a compliant primitive. 
+        representend as a supervised classification problem to produce a compliant primitive. 
 
         Training inputs: D3M dataset with features and labels, and D3M indices
         Outputs: D3M dataset with predicted labels and D3M indices

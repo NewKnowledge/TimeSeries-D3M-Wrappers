@@ -43,7 +43,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
         Primitive that applies kmeans clustering to time series data. Algorithm options are 'GlobalAlignmentKernelKMeans'
         or 'TimeSeriesKMeans,' both of which are bootstrapped from the base library tslearn.clustering. This is an unsupervised, 
-        clustering primitive, but has been shoehorned into a supervised classification problem to produce a compliant primitive. 
+        clustering primitive, but has been represented as a supervised classification problem to produce a compliant primitive. 
 
         Training inputs: D3M dataset with features and labels, and D3M indices
         Outputs: D3M dataset with predicted labels and D3M indices
