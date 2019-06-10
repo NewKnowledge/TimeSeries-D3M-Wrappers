@@ -17,7 +17,6 @@ from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame 
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
 
 __author__ = 'Distil'
 __version__ = '1.0.1'
