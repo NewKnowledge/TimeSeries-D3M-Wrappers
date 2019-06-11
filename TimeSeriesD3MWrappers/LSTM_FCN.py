@@ -16,6 +16,7 @@ from keras.layers import Conv1D, BatchNormalization, GlobalAveragePooling1D, Per
 from keras.layers import Input, Dense, concatenate, Activation
 from keras.models import Model
 from keras.optimizers import Adam
+from keras.utils import to_categorical
 from .layer_utils import AttentionLSTM
 from sklearn.preprocessing import LabelEncoder
 
@@ -33,7 +34,7 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):
-    epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 20, semantic_types=[
+    epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 50, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of training epochs')
     learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 1e-3, semantic_types=[
@@ -108,8 +109,9 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
         self.clf = None
+        self.label_encoder = None
 
-    def _generate_alstmfcn(MAX_SEQUENCE_LENGTH, NB_CLASS, NUM_CELLS=128):
+    def _generate_alstmfcn(self, MAX_SEQUENCE_LENGTH, NB_CLASS, NUM_CELLS=128):
 
         ip = Input(shape=(1, MAX_SEQUENCE_LENGTH))
 
@@ -139,16 +141,18 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
         fits Shapelet classifier using training data from set_training_data and hyperparameters
         '''
-        le = LabelEncoder()
-        y_ind = le.fit_transform(self._y_train.ravel())
-        recip_freq = len(self._y_train) / (len(le.classes_) * np.bincount(y_ind).astype(np.float64))
-        class_weight = recip_freq[le.transform(self.n_classes)]
-
+        self.label_encoder = LabelEncoder()
+        y_ind = self.label_encoder.fit_transform(self._y_train.ravel())
+        print(y_ind, file = sys.__stdout__)
+        recip_freq = len(self._y_train) / (len(self.label_encoder.classes_) * np.bincount(y_ind).astype(np.float64))
+        class_weight = recip_freq[self.label_encoder.transform(np.unique(self._y_train))]
+        y_ind = to_categorical(y_ind, len(np.unique(y_ind)))
+        
         # model compilation and training
         self.clf.compile(optimizer = Adam(lr=self.hyperparams['learning_rate']), 
                          loss = 'categorical_crossentropy', 
                          metrics=['accuracy'])
-        self.clf.fit(self._X_train, self._y_train, 
+        self.clf.fit(self._X_train, y_ind, 
                      batch_size = self.hyperparams['batch_size'], 
                      verbose = 0,
                      epochs = self.hyperparams['epochs'], 
@@ -182,11 +186,10 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # 'series_id' and 'value' should be set by metadata
         n_ts = len(inputs.d3mIndex.unique())
         ts_sz = int(inputs.shape[0] / n_ts)
-        self.n_classes = len(inputs.label.unique())
-        self.clf = self._generate_alstmfcn(ts_sz, self.n_classes)
         self._X_train = np.array(inputs.value).reshape(n_ts, 1, ts_sz) 
         self._y_train = np.array(inputs.label.iloc[::ts_sz])
-
+        self.clf = self._generate_alstmfcn(ts_sz, len(np.unique(self._y_train)))
+    
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
         Produce primitive's classifications for new time series data
@@ -214,7 +217,8 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         input_vals = np.array(inputs.value).reshape(n_ts, 1, ts_sz)
 
         # produce classifications using Shapelets
-        classes = pandas.DataFrame(np.argmax(self.clf.predict(input_vals), axis = 1))
+        classes = pandas.DataFrame(self.label_encoder.inverse_transform(np.argmax(self.clf.predict(input_vals), axis = 1)))
+        print(classes.values, file = sys.__stdout__)
         output_df = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), classes], axis = 1)
         # get column names from metadata
         output_df.columns = ['d3mIndex', 'label']
