@@ -13,7 +13,7 @@ from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
 
 from keras.layers import Conv1D, BatchNormalization, GlobalAveragePooling1D, Permute, Dropout
-from keras.layers import Input, Dense, concatenate, Activation
+from keras.layers import Input, Dense, concatenate, Activation, LSTM
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils import to_categorical
