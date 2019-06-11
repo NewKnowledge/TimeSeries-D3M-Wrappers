@@ -17,6 +17,7 @@ from keras.layers import Input, Dense, concatenate, Activation
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils import to_categorical
+from keras.callbacks import ReduceLROnPlateau
 from .layer_utils import AttentionLSTM
 from sklearn.preprocessing import LabelEncoder
 
@@ -34,7 +35,13 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):
-    epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 50, semantic_types=[
+    attention_lstm = hyperparams.UniformBool(default = True, semantic_types = [
+       'https://metadata.datadrivendiscovery.org/types/TuningParameter'],
+       description="whether to use attention in the lstm component of the model")
+    lstm_cells = hyperparams.UniformInt(lower = 8, upper = 128, default = 128, semantic_types=[
+       'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
+       description = 'number of cells to use in the lstm component of the model')
+    epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 100, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of training epochs')
     learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 1e-3, semantic_types=[
@@ -111,7 +118,39 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self.clf = None
         self.label_encoder = None
 
-    def _generate_alstmfcn(self, MAX_SEQUENCE_LENGTH, NB_CLASS, NUM_CELLS=128):
+    def _generate_lstmfcn(self, MAX_SEQUENCE_LENGTH, NB_CLASS, NUM_CELLS):
+
+        ip = Input(shape=(1, MAX_SEQUENCE_LENGTH))
+
+        x = LSTM(NUM_CELLS)(ip)
+        x = Dropout(0.8)(x)
+
+        y = Permute((2, 1))(ip)
+        y = Conv1D(128, 8, padding='same', kernel_initializer='he_uniform')(y)
+        y = BatchNormalization()(y)
+        y = Activation('relu')(y)
+
+        y = Conv1D(256, 5, padding='same', kernel_initializer='he_uniform')(y)
+        y = BatchNormalization()(y)
+        y = Activation('relu')(y)
+
+        y = Conv1D(128, 3, padding='same', kernel_initializer='he_uniform')(y)
+        y = BatchNormalization()(y)
+        y = Activation('relu')(y)
+
+        y = GlobalAveragePooling1D()(y)
+
+        x = concatenate([x, y])
+
+        out = Dense(NB_CLASS, activation='softmax')(x)
+
+        model = Model(ip, out)
+
+        model.summary()
+
+        return model
+
+    def _generate_alstmfcn(self, MAX_SEQUENCE_LENGTH, NB_CLASS, NUM_CELLS):
 
         ip = Input(shape=(1, MAX_SEQUENCE_LENGTH))
 
@@ -148,6 +187,9 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         class_weight = recip_freq[self.label_encoder.transform(np.unique(self._y_train))]
         y_ind = to_categorical(y_ind, len(np.unique(y_ind)))
         
+        reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
+                                  factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
+
         # model compilation and training
         self.clf.compile(optimizer = Adam(lr=self.hyperparams['learning_rate']), 
                          loss = 'categorical_crossentropy', 
@@ -156,7 +198,8 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                      batch_size = self.hyperparams['batch_size'], 
                      verbose = 0,
                      epochs = self.hyperparams['epochs'], 
-                     class_weight = class_weight)
+                     class_weight = class_weight,
+                     callbacks = [reduce_lr])
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -188,7 +231,10 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         ts_sz = int(inputs.shape[0] / n_ts)
         self._X_train = np.array(inputs.value).reshape(n_ts, 1, ts_sz) 
         self._y_train = np.array(inputs.label.iloc[::ts_sz])
-        self.clf = self._generate_alstmfcn(ts_sz, len(np.unique(self._y_train)))
+        if self.hyperparams['attention_lstm']:
+            self.clf = self._generate_alstmfcn(ts_sz, len(np.unique(self._y_train)), self.hyperparams['lstm_cells'])
+        else:
+            self.clf = self._generate_lstmfcn(ts_sz, len(np.unique(self._y_train)), self.hyperparams['lstm_cells'])
     
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
