@@ -16,7 +16,7 @@ from keras.layers import Conv1D, BatchNormalization, GlobalAveragePooling1D, Per
 from keras.layers import Input, Dense, concatenate, Activation
 from keras.models import Model
 from keras.optimizers import Adam
-from layer_utils import AttentionLSTM
+from .layer_utils import AttentionLSTM
 from sklearn.preprocessing import LabelEncoder
 
 from .timeseries_formatter import TimeSeriesFormatterPrimitive
@@ -90,7 +90,7 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
              }
          ],
         # The same path the primitive is registered with entry points in setup.py.
-        'python_path': 'd3m.primitives.time_series_classification.convolutional_neural_network.LSTM_FCN',
+        'python_path': 'd3m.primitives.time_series_classification.convolutional_neural_net.LSTM_FCN',
         # Choose these from a controlled vocabulary in the schema. If anything is missing which would
         # best describe the primitive, make a merge request.
         'algorithm_types': [
