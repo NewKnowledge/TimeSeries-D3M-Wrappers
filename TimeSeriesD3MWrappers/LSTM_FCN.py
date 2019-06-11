@@ -150,7 +150,7 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                          metrics=['accuracy'])
         self.clf.fit(self._X_train, self._y_train, 
                      batch_size = self.hyperparams['batch_size'], 
-                     verbose = 0
+                     verbose = 0,
                      epochs = self.hyperparams['epochs'], 
                      class_weight = class_weight)
         return CallResult(None)
