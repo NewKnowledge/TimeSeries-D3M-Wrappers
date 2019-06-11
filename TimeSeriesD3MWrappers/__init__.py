@@ -7,7 +7,7 @@ from TimeSeriesD3MWrappers.VAR import VAR
 from TimeSeriesD3MWrappers.timeseries_formatter import TimeSeriesFormatterPrimitive
 from TimeSeriesD3MWrappers.LSTM_FCN import LSTM_FCN
 
-__version__ = '1.0.6'
+__version__ = '1.0.7'
 
 __all__ = [
            "Parrot", 
