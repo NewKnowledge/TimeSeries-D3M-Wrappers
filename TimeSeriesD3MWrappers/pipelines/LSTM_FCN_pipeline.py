@@ -13,7 +13,7 @@ step_0.add_output('produce')
 pipeline_description.add_step(step_0)
 
 # Step 1: DISTIL/NK Shallot primitive
-step_1 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series_classification.convolutional_neural_net.LSTM_FCN'))
+step_1 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series_classification.convolutional_neural_network.LSTM_FCN'))
 step_1.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')
 step_1.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')
 step_1.add_output('produce')
