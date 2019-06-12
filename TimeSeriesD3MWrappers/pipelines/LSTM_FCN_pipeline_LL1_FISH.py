@@ -4,7 +4,7 @@ from d3m.metadata.pipeline import Pipeline, PrimitiveStep
 import sys
 
 # Creating pipeline
-pipeline_description = Pipeline(context=Context.TESTING)
+pipeline_description = Pipeline()
 pipeline_description.add_input(name='inputs')
 
 # Step 0: Denormalize primitive

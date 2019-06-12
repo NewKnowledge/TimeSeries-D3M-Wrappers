@@ -8,7 +8,7 @@ setup(name='TimeSeriesD3MWrappers',
                       "numpy == 1.15.4",
                       'scikit-learn == 0.20.3',
                       'Keras == 2.2.4',
-                      "Sloth @ git+https://github.com/NewKnowledge/sloth@7f2302ef0a2a59d77c025426f1e20695460f73d6#egg=Sloth-2.0.6",
+                      "Sloth @ git+https://github.com/NewKnowledge/sloth@ed6c9011962f76a1ad1498a03af8b31ac75c6576#egg=Sloth-2.0.7",
                       ],
     entry_points = {
         'd3m.primitives': [
