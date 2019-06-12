@@ -12,27 +12,17 @@ step_0.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_re
 step_0.add_output('produce')
 pipeline_description.add_step(step_0)
 
-# Step 1: dataset_to_dataframe
-step_1 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.dataset_to_dataframe.Common'))
+# Step 1: DISTIL/NK Shallot primitive
+step_1 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series_classification.convolutional_neural_net.LSTM_FCN'))
 step_1.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')
-step_1.add_hyperparameter(name='dataframe_resource', argument_type= ArgumentType.VALUE, data='learningData')
+step_1.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')
+step_1.add_hyperparameter(name='attention_lstm', argument_type= ArgumentType.VALUE, data=False)
+step_1.add_hyperparameter(name='lstm_cells', argument_type= ArgumentType.VALUE, data=128)
 step_1.add_output('produce')
 pipeline_description.add_step(step_1)
 
-# Step 2: DISTIL/NK VAR primitive
-step_2 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series_forecasting.vector_autoregression.VAR'))
-step_2.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
-step_2.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
-step_2.add_hyperparameter(name='filter_index_one', argument_type= ArgumentType.VALUE, data=2)
-step_2.add_hyperparameter(name='filter_index_two', argument_type= ArgumentType.VALUE, data=1)
-step_2.add_hyperparameter(name='n_periods', argument_type= ArgumentType.VALUE, data=25)
-step_2.add_hyperparameter(name='interval', argument_type= ArgumentType.VALUE, data=25)
-step_2.add_hyperparameter(name='datetime_index_unit', argument_type= ArgumentType.VALUE, data='D')
-step_2.add_output('produce')
-pipeline_description.add_step(step_2)
-
 # Final Output
-pipeline_description.add_output(name='output predictions', data_reference='steps.2.produce')
+pipeline_description.add_output(name='output predictions', data_reference='steps.1.produce')
 
 # Output json pipeline
 blob = pipeline_description.to_json()

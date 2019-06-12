@@ -5,6 +5,6 @@ cd /primitives/v2019.6.7/Distil
 for i in "${Paths[@]}"; do
   cd $i
   echo $i
-  pwd
-  cd ..
+  cd *
+  python3 -m d3m index describe -i 4 $i > primitive.json
 done
