@@ -35,13 +35,13 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):
-    attention_lstm = hyperparams.UniformBool(default = True, semantic_types = [
+    attention_lstm = hyperparams.UniformBool(default = False, semantic_types = [
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'],
        description="whether to use attention in the lstm component of the model")
-    lstm_cells = hyperparams.UniformInt(lower = 8, upper = 128, default = 128, semantic_types=[
+    lstm_cells = hyperparams.UniformInt(lower = 8, upper = 130, default = 128, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of cells to use in the lstm component of the model')
-    epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 100, semantic_types=[
+    epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 2000, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of training epochs')
     learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 1e-3, semantic_types=[
@@ -188,7 +188,7 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         y_ind = to_categorical(y_ind, len(np.unique(y_ind)))
         
         reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
-                                  factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
+                                  factor=1. / np.cbrt(2), cooldown=0, min_lr=1e-4, verbose=2)
 
         # model compilation and training
         self.clf.compile(optimizer = Adam(lr=self.hyperparams['learning_rate']), 
@@ -293,8 +293,8 @@ if __name__ == '__main__':
         
     # Load data and preprocessing
     input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
-    hyperparams_class = Shallot.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams'] 
-    shallot_client = Shallot(hyperparams=hyperparams_class.defaults().replace({'shapelet_length': 0.4,'num_shapelet_lengths': 2, 'epochs':100}))
+    hyperparams_class = LSTM_FCN.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams'] 
+    shallot_client = LSTM_FCN(hyperparams=hyperparams_class.defaults())
     shallot_client.set_training_data(inputs = input_dataset, outputs = None)
     shallot_client.fit()
     test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
