@@ -17,7 +17,10 @@ step_1 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series
 step_1.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')
 step_1.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')
 step_1.add_hyperparameter(name='epochs', argument_type= ArgumentType.VALUE, data=10000)
-step_1.add_hyperparameter(name='learning_rate', argument_type= ArgumentType.VALUE, data=.001)
+step_1.add_hyperparameter(name='weight_regularizer', argument_type= ArgumentType.VALUE, data=.01)
+step_1.add_hyperparameter(name='num_shapelets', argument_type= ArgumentType.VALUE, data=.3)
+step_1.add_hyperparameter(name='min_shapelet_length', argument_type= ArgumentType.VALUE, data=.2)
+step_1.add_hyperparameter(name='num_shapelet_lengths', argument_type= ArgumentType.VALUE, data=3)
 step_1.add_output('produce')
 pipeline_description.add_step(step_1)
 

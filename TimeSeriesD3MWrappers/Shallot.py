@@ -29,18 +29,23 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):
-    shapelet_length = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.1, 
+    num_shapelets = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.15, 
+        upper_inclusive = False, semantic_types = [
+       'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
+       description = 'number of shapelets, expressed as fraction of length of time series')
+    min_shapelet_length = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.1, 
         upper_inclusive = False, semantic_types = [
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'base shapelet length, expressed as fraction of length of time series')
-    num_shapelet_lengths = hyperparams.UniformInt(lower = 1, upper = 100, default = 2, semantic_types=[
+    num_shapelet_lengths = hyperparams.UniformInt(lower = 1, upper = 3, default = 2, 
+        upper_inclusive = True, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of different shapelet lengths')
     # default epoch size from https://tslearn.readthedocs.io/en/latest/auto_examples/plot_shapelets.html#sphx-glr-auto-examples-plot-shapelets-py
     epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 200, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of training epochs')
-    learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.1, semantic_types=[
+    learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.01, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of different shapelet lengths')
     weight_regularizer = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.01, semantic_types=[
@@ -110,8 +115,8 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._X_train = None          # training inputs
         self._y_train = None          # training labels
         self._shapelets = Shapelets(self.hyperparams['epochs'], 
-            self.hyperparams['shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
-            self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'])  
+            self.hyperparams['min_shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
+            self.hyperparams['num_shapelets'], self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'])  
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
 

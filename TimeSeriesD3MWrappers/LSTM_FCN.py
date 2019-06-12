@@ -38,7 +38,8 @@ class Hyperparams(hyperparams.Hyperparams):
     attention_lstm = hyperparams.UniformBool(default = False, semantic_types = [
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'],
        description="whether to use attention in the lstm component of the model")
-    lstm_cells = hyperparams.UniformInt(lower = 8, upper = 130, default = 128, semantic_types=[
+    lstm_cells = hyperparams.UniformInt(lower = 8, upper = 128, default = 128, 
+        upper_inclusive = True, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of cells to use in the lstm component of the model')
     epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 2000, semantic_types=[
