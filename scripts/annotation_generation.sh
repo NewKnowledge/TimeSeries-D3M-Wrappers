@@ -1,5 +1,10 @@
-paths = ['clustering.hdbscan.Hdbscan', 'clustering.k_means.Sloth', 'time_series_classification.k_neighbors.Kanine', 'time_series_classification.shapelet_learning.Shallot', 'time_series_forecasting.arima.Parrot', 'time_series_forecasting.vector_autoregression.VAR']
-paths = ['d3m.primitives.' + p for path in paths]
+#!/bin/bash  
 
-for path in paths; do
-    echo $path
+Paths=('d3m.primitives.clustering.hdbscan.Hdbscan' 'd3m.primitives.clustering.k_means.Sloth' 'd3m.primitives.time_series_classification.k_neighbors.Kanine' 'd3m.primitives.time_series_classification.shapelet_learning.Shallot' 'd3m.primitives.time_series_forecasting.arima.Parrot' 'd3m.primitives.time_series_forecasting.vector_autoregression.VAR')
+cd /primitives/v2019.6.7/Distil
+for i in "${Paths[@]}"; do
+  cd $i
+  echo $i
+  pwd
+  cd ..
+done
