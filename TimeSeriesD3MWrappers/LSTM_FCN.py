@@ -182,7 +182,6 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
         self.label_encoder = LabelEncoder()
         y_ind = self.label_encoder.fit_transform(self._y_train.ravel())
-        print(y_ind, file = sys.__stdout__)
         recip_freq = len(self._y_train) / (len(self.label_encoder.classes_) * np.bincount(y_ind).astype(np.float64))
         class_weight = recip_freq[self.label_encoder.transform(np.unique(self._y_train))]
         y_ind = to_categorical(y_ind, len(np.unique(y_ind)))
@@ -264,7 +263,6 @@ class LSTM_FCN(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # produce classifications using Shapelets
         classes = pandas.DataFrame(self.label_encoder.inverse_transform(np.argmax(self.clf.predict(input_vals), axis = 1)))
-        print(classes.values, file = sys.__stdout__)
         output_df = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), classes], axis = 1)
         # get column names from metadata
         output_df.columns = ['d3mIndex', 'label']
