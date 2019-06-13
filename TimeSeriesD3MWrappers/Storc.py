@@ -98,7 +98,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-        self.preds_sorted = None
+        self.train_sorted = None
         self.preds_sorted = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:

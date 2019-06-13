@@ -5,10 +5,10 @@ import pandas
 import typing
 from typing import List
 
-from Sloth import cluster
+import hdbscan
+from sklearn.cluster import DBSCAN
 
-from d3m.primitive_interfaces.transformer import TransformerPrimitiveBase
-from d3m.primitive_interfaces.base import CallResult
+from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
@@ -22,6 +22,9 @@ __contact__ = 'mailto:nklabs@newknowledge.com'
 
 Inputs = container.dataset.Dataset
 Outputs = container.dataset.Dataset
+
+class Params(params.Params):
+    pass
 
 class Hyperparams(hyperparams.Hyperparams):
     algorithm = hyperparams.Enumeration(default = 'HDBSCAN', 
@@ -43,7 +46,7 @@ class Hyperparams(hyperparams.Hyperparams):
        description="whether the input dataset is already formatted in long format or not")
     pass
 
-class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
+class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     '''
         Primitive that applies Hierarchical Density-Based Clustering or Density-Based Clustering 
         algorithms to time series data. This is an unsupervised, clustering primitive, but has been
@@ -98,7 +101,49 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
 
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
+        self.train_sorted = None
 
+        if self.hyperparams['algorithm'] == 'HDBSCAN':
+            self.clf = hdbscan.HDBSCAN(min_cluster_size=self.hyperparams['min_cluster_size'],min_samples=self.hyperparams['min_samples'])
+        else:
+            self.clf = DBSCAN(eps=self.hyperparams['eps'],min_samples=self.hyperparams['min_samples'])
+    
+    def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
+        '''
+        fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
+        '''
+        # sort training labels to match clusters by size in produce method
+        self.train_sorted = pandas.Series(self._y_train).value_counts().index
+        return CallResult(None)
+
+    def get_params(self) -> Params:
+        return self._params
+
+    def set_params(self, *, params: Params) -> None:
+        self.params = params
+
+    def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
+        '''
+        Sets primitive's training data
+
+        Parameters
+        ----------
+        inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
+        
+        '''
+        if not self.hyperparams['long_format']:
+            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
+        else:
+            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)
+
+        # load and reshape training data
+        # 'series_id' and 'value' should be set by metadata
+        n_ts = len(inputs.d3mIndex.unique())
+        ts_sz = int(inputs.shape[0] / n_ts)
+        self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz)
+        self._y_train = inputs.label.iloc[::ts_sz]
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -125,16 +170,12 @@ class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         ts_sz = int(inputs.shape[0] / n_ts)
         input_vals = np.array(inputs.value).reshape(n_ts, ts_sz)
 
-        # use HP to produce DBSCAN clustering
-        if self.hyperparams['algorithm'] == 'DBSCAN':
-            #SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
-            _, labels, _ = cluster.ClusterSimilarityMatrix(input_vals, self.hyperparams['eps'], self.hyperparams['min_samples'])
-        else:
-            #SimilarityMatrix = cluster.GenerateSimilarityMatrix(input_vals)
-            _, labels, _ = cluster.HClusterSimilarityMatrix(input_vals, self.hyperparams['min_cluster_size'], self.hyperparams['min_samples'])
-
-        # transform labels for D3M classification task
-        labels = [x + 1 if x >= 0 else x + 2 for x in labels]
+        # cluster training and test series to produce labels
+        values = np.concatenate((self._X_train, input_vals), axis=0)
+        preds = self.clf.fit_predict(values)
+        preds_sorted = pandas.Series(preds).value_counts().index
+        labels = [pred if pred >= 0 else preds_sorted[0] for pred in preds[self._X_train.shape[0]:]]
+        labels = [self.train_sorted[np.where(self.preds_sorted == p)[0][0]] for p in labels]
 
         # add metadata to output
         labels = pandas.DataFrame(labels)
