@@ -173,9 +173,9 @@ class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # cluster training and test series to produce labels
         values = np.concatenate((self._X_train, input_vals), axis=0)
         preds = self.clf.fit_predict(values)
-        preds_sorted = pandas.Series(preds).value_counts().index
+        preds_sorted = pandas.Series(preds).value_counts().index.drop(-1)
         labels = [pred if pred >= 0 else preds_sorted[0] for pred in preds[self._X_train.shape[0]:]]
-        labels = [self.train_sorted[np.where(self.preds_sorted == p)[0][0]] for p in labels]
+        labels = [self.train_sorted[np.where(preds_sorted == p)[0][0]] for p in labels]
 
         # add metadata to output
         labels = pandas.DataFrame(labels)
