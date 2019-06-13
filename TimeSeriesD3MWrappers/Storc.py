@@ -12,7 +12,6 @@ from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, denormalize
-from sklearn import preprocessing
 
 from .timeseries_formatter import TimeSeriesFormatterPrimitive
 
@@ -95,16 +94,23 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         self._params = {}
         self._X_train = None          # training inputs
+        self._y_train = None
         self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-        self._label_encoder = preprocessing.LabelEncoder()
+        self.preds_sorted = None
+        self.preds_sorted = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
         fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
         '''
-        self._kmeans.fit(self._X_train)
+        preds = self._kmeans.fit(self._X_train)
+
+        # sort training predictions and training labels, create dictionary of encodings
+        # match clusters after sorting by size
+        self.preds_sorted = pandas.Series(preds).value_counts().index
+        self.train_sorted = pandas.Series(self._y_train).value_counts().index
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -134,7 +140,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         n_ts = len(inputs.d3mIndex.unique())
         ts_sz = int(inputs.shape[0] / n_ts)
         self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
-        self._label_encoder.fit(inputs.label.iloc[::ts_sz])
+        self._y_train = inputs.label.iloc[::ts_sz]
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -160,8 +166,12 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         ts_sz = int(inputs.shape[0] / n_ts)
         input_vals = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
         
+        # map predictions back to training class labels (clusters sorted by size)
+        preds = self._kmeans.predict(input_vals)
+        preds = [self.train_sorted[np.where(self.preds_sorted == p)[0][0]] for p in preds]
+
         # concatenate predictions and d3mIndex
-        labels = pandas.DataFrame(self._label_encoder.inverse_transform(self._kmeans.predict(input_vals)))
+        labels = pandas.DataFrame(preds)
         # maybe change d3mIndex key here to be programatically generated 
         out_df_sloth = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), labels], axis = 1)
         # get column names from metadata
