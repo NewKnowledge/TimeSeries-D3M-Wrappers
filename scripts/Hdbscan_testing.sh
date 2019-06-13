@@ -1,7 +1,15 @@
 #!/bin/bash -e 
 
+cd /
+git clone https://gitlab.com/jgleason/primitives
+cd primitives
+git branch lstm_pipelines
+git checkout lstm_pipelines
+git remote add upstream https://gitlab.com/datadrivendiscovery/primitives
+git pull upstream master
+
 Datasets=('LL1_Adiac' 'LL1_ArrowHead' '66_chlorineConcentration' 'LL1_CinC_ECG_torso' 'LL1_Cricket_Y' 'LL1_ECG200' 'LL1_ElectricDevices' 'LL1_FISH' 'LL1_FaceFour' 'LL1_FordA' 'LL1_HandOutlines' 'LL1_Haptics' 'LL1_ItalyPowerDemand' 'LL1_Meat' 'LL1_OSULeaf')
-cd /primitives/v2019.6.7/Distil/d3m.primitives.time_series_classification.hdbscan.Hdbscan/1.0.2/pipelines
+cd /primitives/v2019.6.7/Distil/d3m.primitives.clustering.hdbscan.Hdbscan/1.0.2/pipelines
 mkdir test_pipeline
 cd test_pipeline
 
