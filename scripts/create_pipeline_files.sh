@@ -4,6 +4,6 @@ Datasets=('LL1_Adiac' 'LL1_ArrowHead' '66_chlorineConcentration' 'LL1_CinC_ECG_t
 
 cd ../TimeSeriesD3MWrappers/pipelines
 for i in "${Datasets[@]}"; do
-  cp "Shallot_pipeline.py" "Shallot_pipeline_$i.py"
+  cp "Sloth_pipeline.py" "Sloth_pipeline_$i.py"
 done
-rm "Shallot_pipeline.py"
+rm "Sloth_pipeline.py"

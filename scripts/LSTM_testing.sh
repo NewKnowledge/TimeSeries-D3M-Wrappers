@@ -24,8 +24,7 @@ for i in "${Datasets[@]}"; do
   runtime=$((end-start))
 
   # copy pipeline if execution time is less than one hour
-  if [$runtime -lt 3600]
-  then
+  if [ $runtime -lt 3600 ]; then
      echo "$i took less than 1 hour, copying pipeline"
      cp * ../
   fi

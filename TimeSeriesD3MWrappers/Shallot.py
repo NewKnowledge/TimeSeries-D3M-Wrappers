@@ -45,6 +45,10 @@ class Hyperparams(hyperparams.Hyperparams):
     epochs = hyperparams.UniformInt(lower = 1, upper = sys.maxsize, default = 200, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of training epochs')
+    batch_size = hyperparams.UniformInt(lower = 1, upper = 256, upper_inclusive = True,
+       default = 256, semantic_types=[
+       'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
+       description = 'number of training epochs')
     learning_rate = hyperparams.Uniform(lower = 0.0, upper = 1.0, default = 0.01, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description = 'number of different shapelet lengths')
@@ -115,10 +119,13 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._params = {}
         self._X_train = None          # training inputs
         self._y_train = None          # training labels
-        self._shapelets = Shapelets(self.hyperparams['epochs'], 
-            self.hyperparams['min_shapelet_length'], self.hyperparams['num_shapelet_lengths'], 
-            self.hyperparams['num_shapelets'], self.hyperparams['learning_rate'], self.hyperparams['weight_regularizer'],
-            self.random_seed)  
+        self._shapelets = Shapelets(epochs = self.hyperparams['epochs'], 
+            min_shapelet_length = self.hyperparams['min_shapelet_length'], 
+            num_shapelet_lengths = self.hyperparams['num_shapelet_lengths'], 
+            num_shapelets = self.hyperparams['num_shapelets'], 
+            learning_rate = self.hyperparams['learning_rate'], 
+            weight_regularizer = self.hyperparams['weight_regularizer'],
+            random_state = self.random_seed, batch_size = self.hyperparams['batch_size'])  
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
 
