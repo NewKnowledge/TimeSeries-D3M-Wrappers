@@ -6,7 +6,7 @@ import typing
 
 from statsmodels.tsa.api import VAR as vector_ar
 import statsmodels.api as sm
-from statsmodels.tsa.arima_model import ARMA
+from Sloth.predict import Arima
 from sklearn.preprocessing import OneHotEncoder
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
@@ -71,14 +71,12 @@ class Hyperparams(hyperparams.Hyperparams):
         default = 10, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='maximum lag order to evluate to find model - eval criterion = AIC')
-    arma_p = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = 0,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
-        description='The p order of the ARMA model in case some time series are univariate')
-    arma_q = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = 0,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],  
-        description='The q order of the ARMA model in case some time series are univariate')
+    seasonal = hyperparams.UniformBool(default = True, semantic_types = [
+       'https://metadata.datadrivendiscovery.org/types/ControlParameter'],
+       description="whether to perform ARIMA prediction with seasonal component")
+    seasonal_differencing = hyperparams.UniformInt(lower = 1, upper = 365, default = 1, 
+        semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+        description='period of seasonal differencing to use in ARIMA perdiction')
     weights_filter_value = hyperparams.Hyperparameter[typing.Union[str, None]](
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
@@ -173,9 +171,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         arma_q = self.hyperparams['arma_q']
 
         models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 \
-            else ARMA(vals, order = (arma_p, arma_q), dates = original.index) for vals, original in zip(self._values, self._X_train)]
+            else Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) for vals, original in zip(self._values, self._X_train)]
         self._fits = []
-        for vals, model in zip(self._values, models):
+        for vals, model, original in zip(self._values, models, self._X_train):
 
             # iteratively try fewer lags if problems with matrix decomposition
             if vals.shape[1] > 1:
@@ -212,7 +210,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                         self._lag_order = lags
                         logging.debug('Successfully fit model with lag order {}'.format(lags))
             else:
-                self._fits.append(model.fit(disp = -1))
+                X_train = pandas.Series(data = vals.values, index = original.index) 
+                print(X_train, file = sys.__stdout__)
+                self._fits.append(X_train)
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -345,7 +345,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # produce future foecast using VAR / ARMA
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 \
-            else fit.forecast(self.hyperparams['n_periods'])[0] for fit, vals in zip(self._fits, self._values)]
+            else fit.predict(self.hyperparams['n_periods']) for fit, vals in zip(self._fits, self._values)]
         
         # undo differencing transformations 
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \

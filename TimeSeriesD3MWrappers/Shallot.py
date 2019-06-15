@@ -120,7 +120,7 @@ class Shallot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._X_train = None          # training inputs
         self._y_train = None          # training labels
         self._shapelets = Shapelets(epochs = self.hyperparams['epochs'], 
-            min_shapelet_length = self.hyperparams['min_shapelet_length'], 
+            length = self.hyperparams['min_shapelet_length'], 
             num_shapelet_lengths = self.hyperparams['num_shapelet_lengths'], 
             num_shapelets = self.hyperparams['num_shapelets'], 
             learning_rate = self.hyperparams['learning_rate'], 
