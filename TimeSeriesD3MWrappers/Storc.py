@@ -4,6 +4,7 @@ import numpy as np
 import pandas
 
 from Sloth.cluster import KMeans
+from sklearn.cluster import KMeans as kmeans
 from tslearn.datasets import CachedDatasets
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
@@ -101,6 +102,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
         self.train_sorted = None
         self.preds_sorted = None
+        self.target_name = None
     
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -116,6 +118,9 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # handle semi-supervised label case
         if '' in self.train_sorted:
             print(' semi-supervised problem!', file = sys.__stdout__)
+            labeled_training = self._X_train_all_data[self._X_train_all_data[self.target_name] != ''].values
+            preds = self._kmeans.fit(labeled_training)
+            self.preds_sorted = pandas.Series(preds).value_counts().index
             self.train_sorted = self.train_sorted.drop('')
             print(self.preds_sorted, file = sys.__stdout__)
             print(self.train_sorted, file = sys.__stdout__)
@@ -149,20 +154,19 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
             targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        target_name = list(inputs)[targets[0]]
+        self.target_name = list(inputs)[targets[0]]
         index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         
         # load and reshape training data
         # 'series_id' and 'value' should be set by metadata
         n_ts = len(inputs.d3mIndex.unique())
         if n_ts == inputs.shape[0]:
-            ts_sz = inputs.shape[1] - 2
-            self._y_train = inputs[target_name]
-            self._X_train = inputs.drop(columns = list(inputs)[index[0]])
-            self._X_train = self._X_train[self._X_train[target_name] != '']
-            n_ts = self._X_train.shape[0]
-            self._X_train = self._X_train.drop(columns = target_name).values.reshape(n_ts, ts_sz, 1)
+            self._kmeans = kmeans(nclusters = self.hyperparams['nclusters'], random_state=self.random_seed)
+            self._y_train = inputs[self.target_name]
+            self._X_train_all_data = inputs.drop(columns = list(inputs)[index[0]])
+            self._X_train = self._X_train_all_data.drop(columns = self.target_name).values
         else:
+            self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
             ts_sz = int(inputs.shape[0] / n_ts)
             self._y_train = inputs.label.iloc[::ts_sz]
             self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
@@ -200,11 +204,8 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # 'series_id' and 'value' should be set by metadata
         n_ts = len(inputs.d3mIndex.unique())
         if n_ts == inputs.shape[0]:
-            ts_sz = inputs.shape[1] - 2
             X_test = inputs.drop(columns = list(inputs)[index[0]])
-            X_test = X_test[X_test[target_name] != '']
-            n_ts = X_test.shape[0]
-            X_test = X_test.drop(columns = target_name).values.reshape(n_ts, ts_sz, 1)
+            X_test = X_test.drop(columns = target_name).values
         else:
             ts_sz = int(inputs.shape[0] / n_ts)
             X_test = np.array(inputs.value).reshape(n_ts, ts_sz, 1)       
