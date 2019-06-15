@@ -94,23 +94,31 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         self._params = {}
         self._X_train = None          # training inputs
+        self._X_train_with_targets = None
         self._y_train = None
         self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
         self.train_sorted = None
         self.preds_sorted = None
-
+    
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
         fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
         '''
         preds = self._kmeans.fit(self._X_train)
-
+        print('fit kmeans!', file = sys.__stdout__)
         # sort training predictions and training labels, create dictionary of encodings
         # match clusters after sorting by size
         self.preds_sorted = pandas.Series(preds).value_counts().index
         self.train_sorted = pandas.Series(self._y_train).value_counts().index
+        
+        # handle semi-supervised label case
+        if '' in self.train_sorted:
+            print(' semi-supervised problem!', file = sys.__stdout__)
+            self.train_sorted = self.train_sorted.drop('')
+            print(self.preds_sorted, file = sys.__stdout__)
+            print(self.train_sorted, file = sys.__stdout__)
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -133,14 +141,31 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         else:
             hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)
-
+            inputs = ds2df_client.produce(inputs = inputs).value
+        
+        # store information on target, index variable
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        if not len(targets):
+            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        if not len(targets):
+            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        target_name = list(inputs)[targets[0]]
+        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        
         # load and reshape training data
         # 'series_id' and 'value' should be set by metadata
         n_ts = len(inputs.d3mIndex.unique())
-        ts_sz = int(inputs.shape[0] / n_ts)
-        self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
-        self._y_train = inputs.label.iloc[::ts_sz]
+        if n_ts == inputs.shape[0]:
+            ts_sz = inputs.shape[1] - 2
+            self._y_train = inputs[target_name]
+            self._X_train = inputs.drop(columns = list(inputs)[index[0]])
+            self._X_train = self._X_train[self._X_train[target_name] != '']
+            n_ts = self._X_train.shape[0]
+            self._X_train = self._X_train.drop(columns = target_name).values.reshape(n_ts, ts_sz, 1)
+        else:
+            ts_sz = int(inputs.shape[0] / n_ts)
+            self._y_train = inputs.label.iloc[::ts_sz]
+            self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -153,21 +178,39 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         Outputs
             The output is a dataframe containing a single column where each entry is the associated series' cluster number.
         """
+        
         # temporary (until Uncharted adds conversion primitive to repo)
         if not self.hyperparams['long_format']:
             inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
             hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
             ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)
+            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)        
 
-        # parse values from output of time series formatter
+        # store information on target, index variable
+        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        if not len(targets):
+            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        if not len(targets):
+            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        target_name = list(inputs)[targets[0]]
+        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+
+        # load and reshape training data
+        # 'series_id' and 'value' should be set by metadata
         n_ts = len(inputs.d3mIndex.unique())
-        ts_sz = int(inputs.shape[0] / n_ts)
-        input_vals = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
+        if n_ts == inputs.shape[0]:
+            ts_sz = inputs.shape[1] - 2
+            X_test = inputs.drop(columns = list(inputs)[index[0]])
+            X_test = X_test[X_test[target_name] != '']
+            n_ts = X_test.shape[0]
+            X_test = X_test.drop(columns = target_name).values.reshape(n_ts, ts_sz, 1)
+        else:
+            ts_sz = int(inputs.shape[0] / n_ts)
+            X_test = np.array(inputs.value).reshape(n_ts, ts_sz, 1)       
         
         # map predictions back to training class labels (clusters sorted by size)
-        preds = self._kmeans.predict(input_vals)
+        preds = self._kmeans.predict(X_test)
         preds = [self.train_sorted[np.where(self.preds_sorted == p)[0][0]] for p in preds]
 
         # concatenate predictions and d3mIndex
