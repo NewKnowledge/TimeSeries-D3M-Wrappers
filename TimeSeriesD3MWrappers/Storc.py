@@ -4,7 +4,7 @@ import numpy as np
 import pandas
 
 from Sloth.cluster import KMeans
-from sklearn.cluster import KMeans as kmeans
+from sklearn.cluster import KMeans as sk_kmeans
 from tslearn.datasets import CachedDatasets
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
@@ -28,7 +28,7 @@ class Params(params.Params):
     pass
 
 class Hyperparams(hyperparams.Hyperparams):
-    algorithm = hyperparams.Enumeration(default = 'GlobalAlignmentKernelKMeans', 
+    algorithm = hyperparams.Enumeration(default = 'TimeSeriesKMeans', 
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
         values = ['GlobalAlignmentKernelKMeans', 'TimeSeriesKMeans'],
         description = 'type of clustering algorithm to use')
@@ -97,7 +97,6 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._X_train = None          # training inputs
         self._X_train_with_targets = None
         self._y_train = None
-        self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
         self.train_sorted = None
@@ -118,8 +117,8 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # handle semi-supervised label case
         if '' in self.train_sorted:
             print(' semi-supervised problem!', file = sys.__stdout__)
-            labeled_training = self._X_train_all_data[self._X_train_all_data[self.target_name] != ''].values
-            preds = self._kmeans.fit(labeled_training)
+            labeled_training = self._X_train_all_data[self._X_train_all_data[self.target_name] != '']
+            preds = self._kmeans.predict(labeled_training.drop(columns = self.target_name).values)
             self.preds_sorted = pandas.Series(preds).value_counts().index
             self.train_sorted = self.train_sorted.drop('')
             print(self.preds_sorted, file = sys.__stdout__)
@@ -141,35 +140,36 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
         
         '''
+        hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+        ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+        metadata_inputs = ds2df_client.produce(inputs = inputs).value
         if not self.hyperparams['long_format']:
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
+            formatted_inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
-            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-            inputs = ds2df_client.produce(inputs = inputs).value
+            formatted_inputs = ds2df_client.produce(inputs = inputs).value
         
         # store information on target, index variable
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
-            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+            targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
-            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        self.target_name = list(inputs)[targets[0]]
-        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+            targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        self.target_name = list(metadata_inputs)[targets[0]]
+        index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         
         # load and reshape training data
         # 'series_id' and 'value' should be set by metadata
-        n_ts = len(inputs.d3mIndex.unique())
-        if n_ts == inputs.shape[0]:
-            self._kmeans = kmeans(nclusters = self.hyperparams['nclusters'], random_state=self.random_seed)
-            self._y_train = inputs[self.target_name]
-            self._X_train_all_data = inputs.drop(columns = list(inputs)[index[0]])
-            self._X_train = self._X_train_all_data.drop(columns = self.target_name).values
+        n_ts = len(formatted_inputs.d3mIndex.unique())
+        if n_ts == formatted_inputs.shape[0]:
+            self._kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
+            self._y_train = formatted_inputs[self.target_name]
+            self._X_train_all_data = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
+            self._X_train = self._X_train.drop(columns = self.target_name).values
         else:
             self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
-            ts_sz = int(inputs.shape[0] / n_ts)
-            self._y_train = inputs.label.iloc[::ts_sz]
-            self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
+            ts_sz = int(formatted_inputs.shape[0] / n_ts)
+            self._y_train = formatted_inputs.label.iloc[::ts_sz]
+            self._X_train = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -182,33 +182,34 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         Outputs
             The output is a dataframe containing a single column where each entry is the associated series' cluster number.
         """
+        hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+        ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+        metadata_inputs = ds2df_client.produce(inputs = inputs).value
         
         # temporary (until Uncharted adds conversion primitive to repo)
         if not self.hyperparams['long_format']:
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
+            formatted_inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
-            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)        
+            formatted_inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)        
 
         # store information on target, index variable
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
-            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+            targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
-            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        target_name = list(inputs)[targets[0]]
-        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+            targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        target_name = list(metadata_inputs)[targets[0]]
+        index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
 
         # load and reshape training data
         # 'series_id' and 'value' should be set by metadata
-        n_ts = len(inputs.d3mIndex.unique())
-        if n_ts == inputs.shape[0]:
-            X_test = inputs.drop(columns = list(inputs)[index[0]])
+        n_ts = len(formatted_inputs.d3mIndex.unique())
+        if n_ts == formatted_inputs.shape[0]:
+            X_test = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
             X_test = X_test.drop(columns = target_name).values
         else:
-            ts_sz = int(inputs.shape[0] / n_ts)
-            X_test = np.array(inputs.value).reshape(n_ts, ts_sz, 1)       
+            ts_sz = int(formatted_inputs.shape[0] / n_ts)
+            X_test = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)       
         
         # map predictions back to training class labels (clusters sorted by size)
         preds = self._kmeans.predict(X_test)
@@ -216,27 +217,25 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # concatenate predictions and d3mIndex
         labels = pandas.DataFrame(preds)
-        # maybe change d3mIndex key here to be programatically generated 
-        out_df_sloth = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), labels], axis = 1)
+        target_col_name = metadata_inputs.metadata.query_column(targets[0])['name']
+        index_col_name = metadata_inputs.metadata.query_column(index[0])['name']
+        out_df_sloth = pandas.concat([pandas.DataFrame(formatted_inputs[index_col_name].unique()), labels], axis = 1)
         # get column names from metadata
-        out_df_sloth.columns = ['d3mIndex', 'label']
+        print(str(index_col_name), file = sys.__stdout__)
+        out_df_sloth.columns = [str(index_col_name), str(target_col_name)]
         sloth_df = d3m_DataFrame(out_df_sloth)
         
         # first column ('d3mIndex')
         col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
-        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
-        col_dict['name'] = 'd3mIndex'        
+        col_dict['name'] = index_col_name
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
         sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
         
         # second column ('labels')
         col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
         col_dict['structural_type'] = type("1")
-        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
-        col_dict['name'] = 'label'
+        col_dict['name'] = target_col_name
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
         sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
 
