@@ -155,16 +155,20 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._final_logs = [year[-1:,] for year in self._values]
         self._values = [np.diff(year,axis=0) for year in self._values]
 
-        models = [[Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) + \
+        models = [[Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) \
                     for i in range(vals.shape[1])] for vals in self._values]
         self._fits = []
         for vals, model_list, original in zip(self._values, models, self._X_train):
             fits = []
             for model, i in zip(model_list, range(len(model_list))):
+                print(len(original.index), file = sys.__stdout__)
+                print(min(original.index), file = sys.__stdout__)
+                print(max(original.index), file = sys.__stdout__)
                 X_train = pandas.Series(data = vals[:,i].reshape((-1,)), index = original.index[:vals.shape[0]]) 
+                print(f'fitting model {i} !!', file = sys.__stdout__)
                 model.fit(X_train)
                 fits.append(model)
-            self._fits.append(fit)
+            self._fits.append(fits)
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -292,8 +296,9 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using ARIMA models
-        future_forecasts = [np.array([fit.predict(self.hyperparams['n_periods']) for f in fit]).T for fit in self._fits]
-        
+        future_forecasts = [np.array([f.predict(self.hyperparams['n_periods']) for f in fit]).T for fit in self._fits]
+        print(len(future_forecasts), file = sys.__stdout__) 
+        print(future_forecasts[0][:3,:], file = sys.__stdout__) 
         # undo differencing transformations 
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
@@ -369,7 +374,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # combine d3mIndex and predictions
         output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
         var_df = d3m_DataFrame(output_df)
-        
+        print(var_df.head(), file = sys.__stdout__)
         # first column ('d3mIndex')
         col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
@@ -388,6 +393,5 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         return CallResult(var_df)
 
-if __name__ == '__main__':
 
 
