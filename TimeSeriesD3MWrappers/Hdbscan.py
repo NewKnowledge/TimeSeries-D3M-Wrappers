@@ -213,7 +213,6 @@ class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         preds = self.clf.fit_predict(values)
         preds_sorted = pandas.Series(preds).value_counts().index.drop(-1)
         preds_overflow = preds_sorted[len(self.train_sorted):]
-        print(preds_sorted, file = sys.__stdout__)
         labels = [preds_sorted[0] if (pred < 0 or pred in preds_overflow) else pred for pred in preds[self._X_train.shape[0]:]]
         labels = [self.train_sorted[np.where(preds_sorted == p)[0][0]] for p in labels]
 

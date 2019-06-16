@@ -311,8 +311,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # update hyperparams
         colnames = list(inputs)
-        print(self.filter_idx_one, file = sys.__stdout__)
-        print(self.filter_idx, file= sys.__stdout__)
+
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
         """
@@ -334,7 +333,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # sort test dataset by filter_index_one and filter_index if they exist to get correct ordering of d3mIndex
         if self.filter_idx_one is not None and self.filter_idx is not None:
             inputs = inputs.sort_values(by = [self.filter_idx_one, self.filter_idx])
-            print(inputs.head(), file = sys.__stdout__)
         elif self.hyperparams['filter_index_one']:
             inputs = inputs.sort_values(by = self.filter_idx_one)
         elif self.hyperparams['filter_index_two']:
@@ -441,7 +439,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', \
                 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
             var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index), col_dict)
-        print(var_df.head(), file = sys.__stdout__)
         
         return CallResult(var_df)
 
