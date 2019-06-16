@@ -162,7 +162,7 @@ class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._y_train = formatted_inputs[self.target_name]
             self._X_train = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
             self._X_train = self._X_train[self._X_train[self.target_name] != '']
-            self._X_train = self._X_train_all_data.drop(columns = self.target_name).values
+            self._X_train = self._X_train.drop(columns = self.target_name).values
         else:
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
             self._X_train = np.array(formatted_inputs.value).reshape(n_ts, ts_sz)
@@ -219,7 +219,9 @@ class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # add metadata to output
         labels = pandas.DataFrame(labels)
-        out_df = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), labels], axis = 1)
+        target_col_name = metadata_inputs.metadata.query_column(targets[0])['name']
+        index_col_name = metadata_inputs.metadata.query_column(index[0])['name']
+        out_df = pandas.concat([pandas.DataFrame(formatted_inputs[index_col_name].unique()), labels], axis = 1)
         
         # get column names from metadata
         out_df.columns = [str(index_col_name), str(target_col_name)]
