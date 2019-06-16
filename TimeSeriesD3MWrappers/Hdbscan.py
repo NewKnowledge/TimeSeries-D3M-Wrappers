@@ -115,9 +115,12 @@ class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # sort training labels to match clusters by size in produce method
         self.train_sorted = pandas.Series(self._y_train).value_counts().index
         preds = self.clf.fit_predict(self._X_train)
-        preds_sorted = pandas.Series(preds).value_counts().index.drop(-1)
-        preds_norm = preds_sorted[:len(self.train_sorted)]
-        self.train_sorted = [self.train_sorted[np.where(i == preds_norm)] for i in range(len(train_sorted))]
+        self.preds_sorted = pandas.Series(preds).value_counts().index.drop(-1)
+        self.preds_sorted = self.preds_sorted[:len(self.train_sorted)]
+
+        # handle semi-supervised label case
+        if '' in self.train_sorted:
+            self.train_sorted = self.train_sorted.drop('')
 
         return CallResult(None)
 
@@ -156,10 +159,10 @@ class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # load and reshape training data
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
-            self._kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
             self._y_train = formatted_inputs[self.target_name]
-            self._X_train_all_data = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
-            self._X_train = self._X_train.drop(columns = self.target_name).values
+            self._X_train = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
+            self._X_train = self._X_train[self._X_train[self.target_name] != '']
+            self._X_train = self._X_train_all_data.drop(columns = self.target_name).values
         else:
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
             self._X_train = np.array(formatted_inputs.value).reshape(n_ts, ts_sz)

@@ -159,7 +159,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
             self._y_train = formatted_inputs[self.target_name]
             self._X_train_all_data = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
-            self._X_train = self._X_train.drop(columns = self.target_name).values
+            self._X_train = self._X_train_all_data.drop(columns = self.target_name).values
         else:
             self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
