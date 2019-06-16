@@ -108,7 +108,6 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
         '''
         preds = self._kmeans.fit(self._X_train)
-        print('fit kmeans!', file = sys.__stdout__)
         # sort training predictions and training labels, create dictionary of encodings
         # match clusters after sorting by size
         self.preds_sorted = pandas.Series(preds).value_counts().index
@@ -116,13 +115,10 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # handle semi-supervised label case
         if '' in self.train_sorted:
-            print(' semi-supervised problem!', file = sys.__stdout__)
             labeled_training = self._X_train_all_data[self._X_train_all_data[self.target_name] != '']
             preds = self._kmeans.predict(labeled_training.drop(columns = self.target_name).values)
             self.preds_sorted = pandas.Series(preds).value_counts().index
             self.train_sorted = self.train_sorted.drop('')
-            print(self.preds_sorted, file = sys.__stdout__)
-            print(self.train_sorted, file = sys.__stdout__)
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -158,7 +154,6 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         
         # load and reshape training data
-        # 'series_id' and 'value' should be set by metadata
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
             self._kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
@@ -202,7 +197,6 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
 
         # load and reshape training data
-        # 'series_id' and 'value' should be set by metadata
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
             X_test = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
@@ -212,16 +206,17 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             X_test = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)       
         
         # map predictions back to training class labels (clusters sorted by size)
-        preds = self._kmeans.predict(X_test)
-        preds = [self.train_sorted[np.where(self.preds_sorted == p)[0][0]] for p in preds]
+        values = np.concatenate((self._X_train, X_test), axis=0)
+        preds = self._kmeans.predict(values)
+        preds = [self.train_sorted[np.where(self.preds_sorted == p)[0][0]] for p in preds[self._X_train.shape[0]:]]
 
         # concatenate predictions and d3mIndex
         labels = pandas.DataFrame(preds)
         target_col_name = metadata_inputs.metadata.query_column(targets[0])['name']
         index_col_name = metadata_inputs.metadata.query_column(index[0])['name']
         out_df_sloth = pandas.concat([pandas.DataFrame(formatted_inputs[index_col_name].unique()), labels], axis = 1)
+        
         # get column names from metadata
-        print(str(index_col_name), file = sys.__stdout__)
         out_df_sloth.columns = [str(index_col_name), str(target_col_name)]
         sloth_df = d3m_DataFrame(out_df_sloth)
         
