@@ -26,17 +26,9 @@ step_2.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_re
 step_2.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
 step_2.add_hyperparameter(name='filter_index_one', argument_type= ArgumentType.VALUE, data=2)
 step_2.add_hyperparameter(name='filter_index_two', argument_type= ArgumentType.VALUE, data=1)
-step_2.add_hyperparameter(name='n_periods', argument_type= ArgumentType.VALUE, data=25)
-step_2.add_hyperparameter(name='interval', argument_type= ArgumentType.VALUE, data=58)
+step_2.add_hyperparameter(name='n_periods', argument_type= ArgumentType.VALUE, data=58)
 step_2.add_hyperparameter(name='specific_intervals', argument_type= ArgumentType.VALUE, 
-    data=[[330, 360], [328, 360], [329, 362], [333, 363], [304, 306], [332, 362], [332, 361], 
-          [332, 358], [329, 361], [329, 362], [330, 362], [332, 362], [333, 359], [330, 362], 
-          [333, 362], [332, 358], [330, 360], [328, 360], [331, 363], [332, 358], [319, 360], 
-          [329, 363], [330, 362], [332, 362], [332, 361], [331, 361], [328, 360], [328, 362], 
-          [330, 362], [333, 357], [332, 358], [330, 360], [328, 360], [331, 363], [332, 362], 
-          [332, 361], [332, 358], [322, 361], [329, 362], [330, 362], [332, 362], [333, 359], 
-          [330, 360], [328, 360], [329, 362], [333, 363], [332, 361], [332, 358], [330, 360], 
-          [330, 363], [330, 362], [332, 362], [332, 361], [331, 361], [328, 360], [329, 362]])
+           data = [[24, 54], [22, 54], [23, 56], [27, 57], [0, 0], [26, 56], [26, 55], [26, 52], [23, 55], [23, 56], [24, 56], [26, 56], [27, 53], [24, 56], [27, 56], [26, 52], [24, 54], [22, 54], [25, 57], [26, 52], [13, 54], [23, 57], [24, 56], [26, 56], [26, 55], [25, 55], [22, 54], [22, 56], [24, 56], [27, 51], [26, 52], [24, 54], [22, 54], [25, 57], [26, 56], [26, 55], [26, 52], [16, 55], [23, 56], [24, 56], [26, 56], [27, 53], [24, 54], [22, 54], [23, 56], [27, 57], [26, 55], [26, 52], [24, 54], [24, 57], [24, 56], [26, 56], [26, 55], [25, 55], [22, 54], [23, 56]])
 step_2.add_hyperparameter(name='datetime_index_unit', argument_type= ArgumentType.VALUE, data='D')
 step_2.add_output('produce')
 pipeline_description.add_step(step_2)

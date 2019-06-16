@@ -12,7 +12,7 @@ from sklearn.preprocessing import OneHotEncoder
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
 from d3m import container, utils
-from d3m.container import DataFrame as d3m_DataFrame
+from d3m.container import DataFrame as d3m_DataFrame, List
 from d3m.metadata import hyperparams, base as metadata_base, params
 from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame 
 
@@ -59,7 +59,7 @@ class Hyperparams(hyperparams.Hyperparams):
         default = None,
         semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='interval with which to sample future predictions')
-    specific_intervals = hyperparams.Hyperparameter[List[List[int]]](
+    specific_intervals = hyperparams.Hyperparameter[typing.Union[typing.List[typing.List[int]], None]](
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
         default=None,
         description='defines specific prediction intervals if  different time series require different \
@@ -311,7 +311,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # update hyperparams
         colnames = list(inputs)
-
+        print(self.filter_idx_one, file = sys.__stdout__)
+        print(self.filter_idx, file= sys.__stdout__)
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
         """
@@ -333,6 +334,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # sort test dataset by filter_index_one and filter_index if they exist to get correct ordering of d3mIndex
         if self.filter_idx_one is not None and self.filter_idx is not None:
             inputs = inputs.sort_values(by = [self.filter_idx_one, self.filter_idx])
+            print(inputs.head(), file = sys.__stdout__)
         elif self.hyperparams['filter_index_one']:
             inputs = inputs.sort_values(by = self.filter_idx_one)
         elif self.hyperparams['filter_index_two']:
@@ -359,7 +361,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         idx = None 
         if self.hyperparams['datetime_interval_exception']:
             idx = np.where(np.sort(inputs[self.filter_idx_one].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
-        for future_forecast, ind, specific_interval in zip(future_forecasts, range(len(future_forecasts)), self.hyperparams['specific_intervals']):
+        if self.hyperparams['specific_intervals'] is None:
+            specific_intervals = np.repeat(None, len(future_forecasts))
+        else:
+            specific_intervals = self.hyperparams['specific_intervals']
+        for future_forecast, ind, specific_interval in zip(future_forecasts, range(len(future_forecasts)), specific_intervals):
             if specific_interval is not None:
                 final_forecasts.append(future_forecast.iloc[specific_interval,:])
             if ind == idx:
