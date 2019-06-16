@@ -26,7 +26,6 @@ Outputs = container.pandas.DataFrame
 class Params(params.Params):
     pass
 
-# default values chosen for 56_sunspots 'sunspot.year' seed dataset
 class Hyperparams(hyperparams.Hyperparams):
     datetime_index = hyperparams.Set(
         elements=hyperparams.Hyperparameter[int](-1),
@@ -151,19 +150,17 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # log transformation for standardization, difference, drop NAs
         self._mins = [year.values.min() if year.values.min() < 0 else 0 for year in self._X_train]
         self._values = [year.apply(lambda x: x - min + 1) for year, min in zip(self._X_train, self._mins)]
+        self._values = [vals.values for vals in self._values]
         #self._values = [np.log(year.values) for year in self._values]
         #self._final_logs = [year[-1:,] for year in self._values]
         #self._values = [np.diff(year,axis=0) for year in self._values]
-
+        print(len(self._values), file = sys.__stdout__)
         models = [[Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) \
                     for i in range(vals.shape[1])] for vals in self._values]
         self._fits = []
         for vals, model_list, original in zip(self._values, models, self._X_train):
             fits = []
             for model, i in zip(model_list, range(len(model_list))):
-                print(len(original.index), file = sys.__stdout__)
-                print(min(original.index), file = sys.__stdout__)
-                print(max(original.index), file = sys.__stdout__)
                 X_train = pandas.Series(data = vals[:,i].reshape((-1,)), index = original.index[:vals.shape[0]]) 
                 print(f'fitting model {i} !!', file = sys.__stdout__)
                 model.fit(X_train)
@@ -300,7 +297,6 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         print(len(future_forecasts), file = sys.__stdout__) 
         print(future_forecasts[0][:3,:], file = sys.__stdout__) 
         # undo differencing transformations 
-        future_forecasts = [future_forecast for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
         if self._lag_order == 1:
             future_forecasts = [future_forecast.apply(lambda x: x + min - 1) for future_forecast, min in zip(future_forecasts, self._mins)]
