@@ -151,10 +151,6 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._mins = [year.values.min() if year.values.min() < 0 else 0 for year in self._X_train]
         self._values = [year.apply(lambda x: x - min + 1) for year, min in zip(self._X_train, self._mins)]
         self._values = [vals.values for vals in self._values]
-        #self._values = [np.log(year.values) for year in self._values]
-        #self._final_logs = [year[-1:,] for year in self._values]
-        #self._values = [np.diff(year,axis=0) for year in self._values]
-        print(len(self._values), file = sys.__stdout__)
         models = [[Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) \
                     for i in range(vals.shape[1])] for vals in self._values]
         self._fits = []
@@ -162,7 +158,6 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             fits = []
             for model, i in zip(model_list, range(len(model_list))):
                 X_train = pandas.Series(data = vals[:,i].reshape((-1,)), index = original.index[:vals.shape[0]]) 
-                print(f'fitting model {i} !!', file = sys.__stdout__)
                 model.fit(X_train)
                 fits.append(model)
             self._fits.append(fits)
@@ -294,8 +289,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
         # produce future foecast using ARIMA models
         future_forecasts = [np.array([f.predict(self.hyperparams['n_periods']) for f in fit]).T for fit in self._fits]
-        print(len(future_forecasts), file = sys.__stdout__) 
-        print(future_forecasts[0][:3,:], file = sys.__stdout__) 
+
         # undo differencing transformations 
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
         if self._lag_order == 1:
@@ -370,7 +364,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # combine d3mIndex and predictions
         output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
         var_df = d3m_DataFrame(output_df)
-        print(var_df.head(), file = sys.__stdout__)
+
         # first column ('d3mIndex')
         col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
