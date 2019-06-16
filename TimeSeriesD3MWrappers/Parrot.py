@@ -151,9 +151,9 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # log transformation for standardization, difference, drop NAs
         self._mins = [year.values.min() if year.values.min() < 0 else 0 for year in self._X_train]
         self._values = [year.apply(lambda x: x - min + 1) for year, min in zip(self._X_train, self._mins)]
-        self._values = [np.log(year.values) for year in self._values]
-        self._final_logs = [year[-1:,] for year in self._values]
-        self._values = [np.diff(year,axis=0) for year in self._values]
+        #self._values = [np.log(year.values) for year in self._values]
+        #self._final_logs = [year[-1:,] for year in self._values]
+        #self._values = [np.diff(year,axis=0) for year in self._values]
 
         models = [[Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) \
                     for i in range(vals.shape[1])] for vals in self._values]
@@ -300,7 +300,7 @@ class Parrot(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         print(len(future_forecasts), file = sys.__stdout__) 
         print(future_forecasts[0][:3,:], file = sys.__stdout__) 
         # undo differencing transformations 
-        future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
+        future_forecasts = [future_forecast for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
         if self._lag_order == 1:
             future_forecasts = [future_forecast.apply(lambda x: x + min - 1) for future_forecast, min in zip(future_forecasts, self._mins)]
