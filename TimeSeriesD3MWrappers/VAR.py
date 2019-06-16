@@ -164,12 +164,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._values = [np.log(year.values) for year in self._values]
         self._final_logs = [year[-1:,] for year in self._values]
         self._values = [np.diff(year,axis=0) for year in self._values]
-
-        # use ARMA model in case some data only has 1 variable
-        ## TODO - calculate these params automatically / hyperparams
-        arma_p = self.hyperparams['arma_p']
-        arma_q = self.hyperparams['arma_q']
-
+        print(self.hyperparams['seasonal'],  file = sys.__stdout__)
+        print(self.hyperparams['seasonal_differencing'], file = sys.__stdout__)
         models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 \
             else Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) for vals, original in zip(self._values, self._X_train)]
         self._fits = []
@@ -210,9 +206,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                         self._lag_order = lags
                         logging.debug('Successfully fit model with lag order {}'.format(lags))
             else:
-                X_train = pandas.Series(data = vals.values, index = original.index) 
+                print(vals.shape, file = sys.__stdout__)
+                print(len(original.index), file = sys.__stdout__)
+                X_train = pandas.Series(data = vals.reshape((-1,)), index = original.index[:vals.shape[0]]) 
                 print(X_train, file = sys.__stdout__)
-                self._fits.append(X_train)
+                model.fit(X_train)
+                self._fits.append(model)
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -275,7 +274,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray())
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
-        
         # create unique_index column if other indices
         unique_index = inputs['temp_time_index']
         if self.hyperparams['filter_index_one'] is not None:
@@ -283,10 +281,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # drop original categorical variables, index key, and times
         inputs.set_index('temp_time_index', inplace=True)
+        print(len(inputs.index), file = sys.__stdout__)
         drop_idx = categories + times + key
         inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
-
+        
+        
         # group data if datetime is not unique
         if not unique_index.is_unique:
             inputs = inputs.groupby(inputs.index).agg('sum')
@@ -303,12 +303,19 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             company_dfs = [[company[1].drop(columns=self.filter_idx) for company in year] for year in company_dfs]
         else:
             company_dfs = [year_dfs]
-        reind = [[company.reindex(pandas.date_range(min(year[0].index), max(year[0].index))) for company in year] for year in company_dfs]
+        print(min(company_dfs[0][0].index.year), file = sys.__stdout__)
+        print(max(company_dfs[0][0].index.year), file = sys.__stdout__)
+        reind = [[company.reindex(pandas.date_range(min(year[0].index), max(year[0].index))) if min(year[0].index.year) == max(year[0].index.year)
+                      else company for company in year] for year in company_dfs]
+        print(reind[0][0].index[:5], file = sys.__stdout__)
         interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
         self._target_lengths = [frame[0].shape[1] for frame in interpolated]
         vals = [pandas.concat(company, axis=1) for company in interpolated]
         self._X_train = vals
-
+        print(len(vals[0].index), file = sys.__stdout__)
+        print(vals[0].index[:5], file = sys.__stdout__)
+        print(vals[0].index[5:], file = sys.__stdout__)
+        print(vals[0].head(), file = sys.__stdout__)
         # update hyperparams
         colnames = list(inputs)
 
@@ -410,11 +417,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
                 colnames = list(set(self._X_train[0]))
             else:
-                colnames = list(final_forecasts[0])
+                colnames = list(self._X_train[0])
         future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
         future_forecast.columns = colnames
         future_forecast = future_forecast[target_names]
-        
         # combine d3mIndex and predictions
         output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
         var_df = d3m_DataFrame(output_df)
@@ -427,14 +433,16 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
         #('predictions')
-        for index, name in zip(range(1, len(colnames)), colnames):
+        print(future_forecast.columns, file = sys.__stdout__)
+        for index, name in zip(range(1, len(future_forecast.columns)), future_forecast.columns):
             col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
             col_dict['structural_type'] = type("1")
             col_dict['name'] = name
             col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', \
                 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
             var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index), col_dict)
-
+        print(var_df.head(), file = sys.__stdout__)
+        
         return CallResult(var_df)
 
     
