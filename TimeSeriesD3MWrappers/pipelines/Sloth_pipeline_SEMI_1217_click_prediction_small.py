@@ -22,8 +22,16 @@ step_1.add_hyperparameter(name='long_format', argument_type= ArgumentType.VALUE,
 step_1.add_output('produce')
 pipeline_description.add_step(step_1)
 
+# Step 2: Gradient boosting classifier
+step_2 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.classification.xgboost_gbtree.DataFrameCommon'))
+step_2.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
+step_2.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
+step_2.add_output('produce')
+step_2.add_hyperparameter(name='add_index_columns', argument_type=ArgumentType.VALUE,data=True)
+pipeline_description.add_step(step_2)
+
 # Final Output
-pipeline_description.add_output(name='output predictions', data_reference='steps.1.produce')
+pipeline_description.add_output(name='output predictions', data_reference='steps.2.produce')
 
 # Output json pipeline
 blob = pipeline_description.to_json()
