@@ -138,19 +138,17 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
             kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
             X_test = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)       
+        
+        metadata_inputs['cluster_labels'] = kmeans.fit_predict(X_test)
 
-        preds = kmeans.fit_predict(X_test)
-        labels = pandas.DataFrame(preds, columns='cluster_labels')
-        sloth_df = d3m_DataFrame(labels)
-
-        # first column ('clusters')
-        col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
+        # last column ('clusters')
+        col_dict = dict(metadata_inputs.metadata.query((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1])))
         col_dict['structural_type'] = type("1")
         col_dict['name'] = 'cluster_labels'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute')
-        sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
-
-        return CallResult(utils_cp.append_columns(metadata_inputs,d3m_df))
+        metadata_inputs.metadata = metadata_inputs.metadata.update((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1]), col_dict)
+        print(metadata_inputs.head(), file = sys.__stdout__)
+        return CallResult(metadata_inputs)
 
 if __name__ == '__main__':
     
