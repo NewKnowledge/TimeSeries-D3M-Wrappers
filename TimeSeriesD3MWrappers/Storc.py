@@ -7,7 +7,6 @@ from Sloth.cluster import KMeans
 from sklearn.cluster import KMeans as sk_kmeans
 from tslearn.datasets import CachedDatasets
 
-from d3m.primitive_interfaces.transformer import TransformerPrimitiveBase
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
 from d3m import container, utils
@@ -41,7 +40,7 @@ class Hyperparams(hyperparams.Hyperparams):
        description="whether the input dataset is already formatted in long format or not")
     pass
 
-class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
+class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
         Primitive that applies kmeans clustering to time series data. Algorithm options are 'GlobalAlignmentKernelKMeans'
         or 'TimeSeriesKMeans,' both of which are bootstrapped from the base library tslearn.clustering. This is an unsupervised, 
@@ -95,8 +94,62 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
         self._params = {}
+        self._X_train = None          # training inputs
+        self._X_train_with_targets = None
+        self._y_train = None
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
+    
+    def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
+        '''
+        fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
+        '''
+        self._kmeans.fit(self._X_train)
+        return CallResult(None)
+
+    def get_params(self) -> Params:
+        return self._params
+
+    def set_params(self, *, params: Params) -> None:
+        self.params = params
+
+    def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
+        '''
+        Sets primitive's training data
+        Parameters
+        ----------
+        inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
+        
+        '''
+        hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
+        ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
+        metadata_inputs = ds2df_client.produce(inputs = inputs).value
+        if not self.hyperparams['long_format']:
+            formatted_inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
+        else:
+            formatted_inputs = ds2df_client.produce(inputs = inputs).value
+        
+        # store information on target, index variable
+        targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        if not len(targets):
+            targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        if not len(targets):
+            targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        target_name = list(metadata_inputs)[targets[0]]
+        index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        
+        # load and reshape training data
+        n_ts = len(formatted_inputs.d3mIndex.unique())
+        if n_ts == formatted_inputs.shape[0]:
+            self._kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
+            self._y_train = formatted_inputs[target_name]
+            self._X_train_all_data = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
+            self._X_train = self._X_train_all_data.drop(columns = target_name).values
+        else:
+            self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
+            ts_sz = int(formatted_inputs.shape[0] / n_ts)
+            self._y_train = formatted_inputs.label.iloc[::ts_sz]
+            self._X_train = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -131,15 +184,13 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         # load and reshape training data
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
-            kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
             X_test = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
             X_test = X_test.drop(columns = target_name).values
         else:
-            kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
             X_test = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)       
         
-        metadata_inputs['cluster_labels'] = kmeans.fit_predict(X_test)
+        metadata_inputs['cluster_labels'] = self._kmeans.predict(X_test)
 
         # last column ('clusters')
         col_dict = dict(metadata_inputs.metadata.query((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1])))
@@ -148,6 +199,7 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute')
         metadata_inputs.metadata = metadata_inputs.metadata.update((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1]), col_dict)
         print(metadata_inputs.head(), file = sys.__stdout__)
+        print(list(metadata_inputs), file = sys.__stdout__)
         return CallResult(metadata_inputs)
 
 if __name__ == '__main__':
