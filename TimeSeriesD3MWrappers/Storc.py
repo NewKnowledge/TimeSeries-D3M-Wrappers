@@ -147,7 +147,7 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
         col_dict['name'] = 'cluster_labels'
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute'')
+        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute')
         sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
         return CallResult(utils_cp.append_columns(metadata_inputs,d3m_df))
