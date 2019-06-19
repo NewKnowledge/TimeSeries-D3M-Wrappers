@@ -43,8 +43,15 @@ step_4.add_output('produce')
 step_4.add_hyperparameter(name='add_index_columns', argument_type=ArgumentType.VALUE,data=True)
 pipeline_description.add_step(step_4)
 
+# Step 5: construct output
+step_5 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.construct_predictions.DataFrameCommon'))
+step_5.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.4.produce')
+step_5.add_argument(name='reference', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
+step_5.add_output('produce')
+pipeline_description.add_step(step_5)
+
 # Final Output
-pipeline_description.add_output(name='output predictions', data_reference='steps.4.produce')
+pipeline_description.add_output(name='output predictions', data_reference='steps.5.produce')
 
 # Output json pipeline
 blob = pipeline_description.to_json()
