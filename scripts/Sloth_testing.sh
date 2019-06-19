@@ -5,20 +5,25 @@ Datasets=('SEMI_1040_sylva_prior' 'SEMI_1217_click_prediction_small' 'LL1_Adiac'
 #rm /primitives/v2019.6.7/Distil/d3m.primitives.time_series_classification.k_means.Sloth/2.0.3/pipelines/test_pipeline/*.meta
 #rm /primitives/v2019.6.7/Distil/d3m.primitives.time_series_classification.k_means.Sloth/2.0.3/pipelines/test_pipeline/*.json
 cd /primitives
-git pull upstream master
-git branch clustering_pipelines
+#git pull upstream master
+#git branch clustering_pipelines
 git checkout clustering_pipelines
 cd /primitives/v2019.6.7/Distil/d3m.primitives.clustering.k_means.Sloth/2.0.3/pipelines
-mkdir test_pipeline
-mkdir experiments
+#mkdir test_pipeline
+#mkdir experiments
 cd test_pipeline
 
 # create text file to record scores and timing information
-touch scores.txt
-echo "DATASET, F1 SCORE, EXECUTION TIME" >> scores.txt
+#touch scores.txt
+#echo "DATASET, F1 SCORE, EXECUTION TIME" >> scores.txt
 
 for i in "${Datasets[@]}"; do
-
+  
+  file="/src/timeseriesd3mwrappers/TimeSeriesD3MWrappers/pipelines/Sloth_pipeline_$i.py"
+  match="step_1.add_output('produce')"
+  insert="step_1.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')"
+  sed -i "/step_1.add_argument(name='outputs'/d" $file
+  sed -i "s/$match/$match\n$insert/" $file
   # generate and save pipeline + metafile
   python3 "/src/timeseriesd3mwrappers/TimeSeriesD3MWrappers/pipelines/Sloth_pipeline_$i.py" $i
 
