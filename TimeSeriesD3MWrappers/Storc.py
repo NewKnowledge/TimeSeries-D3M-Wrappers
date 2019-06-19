@@ -23,7 +23,7 @@ __contact__ = 'mailto:nklabs@newknowledge.com'
 
 
 Inputs = container.dataset.Dataset
-Outputs = container.dataset.Dataset
+Outputs = container.pandas.DataFrame
 
 class Params(params.Params):
     pass
@@ -150,7 +150,7 @@ class Storc(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute'')
         sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
-        return CallResult(utils_cp.append_columns(inputs,d3m_df))
+        return CallResult(utils_cp.append_columns(metadata_inputs,d3m_df))
 
 if __name__ == '__main__':
     
