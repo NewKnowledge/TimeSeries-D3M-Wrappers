@@ -12,7 +12,7 @@ from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
-from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, denormalize
+from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, dataframe_utils
 
 from .timeseries_formatter import TimeSeriesFormatterPrimitive
 
@@ -22,7 +22,7 @@ __contact__ = 'mailto:nklabs@newknowledge.com'
 
 
 Inputs = container.dataset.Dataset
-Outputs = container.pandas.DataFrame
+Outputs = container.dataset.Dataset
 
 class Params(params.Params):
     pass
@@ -151,7 +151,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._y_train = formatted_inputs.label.iloc[::ts_sz]
             self._X_train = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)
 
-    def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
+    def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[container.pandas.DataFrame]:
         """
         Parameters
         ----------
@@ -170,7 +170,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if not self.hyperparams['long_format']:
             formatted_inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
-            formatted_inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)        
+            formatted_inputs = ds2df_client.produce(inputs = inputs).value 
 
         # store information on target, index variable
         targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
@@ -178,28 +178,32 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        target_name = list(metadata_inputs)[targets[0]]
+        target_names = [list(metadata_inputs)[t] for t in targets]
         index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
 
         # load and reshape training data
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
             X_test = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
-            X_test = X_test.drop(columns = target_name).values
+            X_test = X_test.drop(columns = target_names).values
         else:
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
             X_test = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)       
         
         metadata_inputs['cluster_labels'] = self._kmeans.predict(X_test)
 
+        # special semi-supervised case - during training, only produce rows with labels
+        series = metadata_inputs[target_names] != ''
+        if series.any().any():
+            metadata_inputs = dataframe_utils.select_rows(metadata_inputs, np.flatnonzero(series))
+        
         # last column ('clusters')
-        col_dict = dict(metadata_inputs.metadata.query((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1])))
-        col_dict['structural_type'] = type("1")
+        col_dict = dict(metadata_inputs.metadata.query((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1] - 1)))
+        col_dict['structural_type'] = type(1)
         col_dict['name'] = 'cluster_labels'
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute')
-        metadata_inputs.metadata = metadata_inputs.metadata.update((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1]), col_dict)
-        print(metadata_inputs.head(), file = sys.__stdout__)
-        print(list(metadata_inputs), file = sys.__stdout__)
+        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute', 'https://metadata.datadrivendiscovery.org/types/CategoricalData')
+        metadata_inputs.metadata = metadata_inputs.metadata.update((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1] - 1), col_dict)
+        print(metadata_inputs.metadata.query_column(3), file = sys.__stdout__)
         return CallResult(metadata_inputs)
 
 if __name__ == '__main__':
