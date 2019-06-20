@@ -93,10 +93,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0)-> None:
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
-        self._params = {}
         self._X_train = None          # training inputs
-        self._X_train_with_targets = None
-        self._y_train = None
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
     
@@ -142,13 +139,11 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
             self._kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
-            self._y_train = formatted_inputs[target_name]
             self._X_train_all_data = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
             self._X_train = self._X_train_all_data.drop(columns = target_name).values
         else:
             self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
-            self._y_train = formatted_inputs.label.iloc[::ts_sz]
             self._X_train = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[container.pandas.DataFrame]:
@@ -197,14 +192,14 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if series.any().any():
             metadata_inputs = dataframe_utils.select_rows(metadata_inputs, np.flatnonzero(series))
         
+        sloth_df = d3m_DataFrame(pandas.DataFrame(self._kmeans.predict(X_test), columns=['cluster_labels']))
         # last column ('clusters')
-        col_dict = dict(metadata_inputs.metadata.query((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1] - 1)))
+        col_dict = dict(metadata_inputs.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type(1)
         col_dict['name'] = 'cluster_labels'
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute', 'https://metadata.datadrivendiscovery.org/types/CategoricalData')
-        metadata_inputs.metadata = metadata_inputs.metadata.update((metadata_base.ALL_ELEMENTS, metadata_inputs.shape[1] - 1), col_dict)
-        print(metadata_inputs.metadata.query_column(3), file = sys.__stdout__)
-        return CallResult(metadata_inputs)
+        sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
+        return CallResult(utils_cp.append_columns(metadata_inputs, sloth_df))
 
 if __name__ == '__main__':
     
