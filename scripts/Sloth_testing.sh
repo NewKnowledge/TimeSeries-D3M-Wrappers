@@ -1,11 +1,16 @@
 #!/bin/bash -e 
 
-#Datasets=('LL1_Adiac' 'LL1_ArrowHead' '66_chlorineConcentration' 'LL1_CinC_ECG_torso' 'LL1_Cricket_Y' 'LL1_ECG200' 'LL1_ElectricDevices' 'LL1_FISH' 'LL1_FaceFour' 'LL1_FordA' 'LL1_HandOutlines' 'LL1_Haptics' 'LL1_ItalyPowerDemand' 'LL1_Meat' 'LL1_OSULeaf')
-Datasets=('SEMI_1040_sylva_prior' 'SEMI_1217_click_prediction_small')
-rm /primitives/v2019.6.7/Distil/d3m.primitives.time_series_classification.k_means.Sloth/2.0.3/pipelines/test_pipeline/*.meta
-rm /primitives/v2019.6.7/Distil/d3m.primitives.time_series_classification.k_means.Sloth/2.0.3/pipelines/test_pipeline/*.json
-cd /primitives/v2019.6.7/Distil/d3m.primitives.time_series_classification.k_means.Sloth/2.0.3/pipelines
+Datasets=('SEMI_1040_sylva_prior' 'SEMI_1217_click_prediction_small' 'LL1_Adiac' 'LL1_ArrowHead' '66_chlorineConcentration' 'LL1_CinC_ECG_torso' 'LL1_Cricket_Y' 'LL1_ECG200' 'LL1_ElectricDevices' 'LL1_FISH' 'LL1_FaceFour' 'LL1_FordA' 'LL1_HandOutlines' 'LL1_Haptics' 'LL1_ItalyPowerDemand' 'LL1_Meat' 'LL1_OSULeaf')
+#Datasets=('SEMI_1040_sylva_prior' 'SEMI_1217_click_prediction_small')
+#rm /primitives/v2019.6.7/Distil/d3m.primitives.time_series_classification.k_means.Sloth/2.0.3/pipelines/test_pipeline/*.meta
+#rm /primitives/v2019.6.7/Distil/d3m.primitives.time_series_classification.k_means.Sloth/2.0.3/pipelines/test_pipeline/*.json
+cd /primitives
+#git pull upstream master
+#git branch clustering_pipelines
+git checkout clustering_pipelines
+cd /primitives/v2019.6.7/Distil/d3m.primitives.clustering.k_means.Sloth/2.0.3/pipelines
 #mkdir test_pipeline
+#mkdir experiments
 cd test_pipeline
 
 # create text file to record scores and timing information
@@ -13,9 +18,14 @@ cd test_pipeline
 #echo "DATASET, F1 SCORE, EXECUTION TIME" >> scores.txt
 
 for i in "${Datasets[@]}"; do
-
+  
+  file="/src/timeseriesd3mwrappers/TimeSeriesD3MWrappers/pipelines/Sloth_pipeline_$i.py"
+  match="step_1.add_output('produce')"
+  insert="step_1.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')"
+  sed -i "/step_1.add_argument(name='outputs'/d" $file
+  sed -i "s/$match/$match\n$insert/" $file
   # generate and save pipeline + metafile
-  python3 "/src/timeseriesd3mwrappers/TimeSeriesD3MWrappers/pipelines/Sloth_pipeline.py" $i
+  python3 "/src/timeseriesd3mwrappers/TimeSeriesD3MWrappers/pipelines/Sloth_pipeline_$i.py" $i
 
   # test and score pipeline
   start=`date +%s` 
@@ -26,7 +36,7 @@ for i in "${Datasets[@]}"; do
   # copy pipeline if execution time is less than one hour
   if [ $runtime -lt 3600 ]; then
      echo "$i took less than 1 hour, copying pipeline"
-     cp * ../
+     cp * ../experiments
   fi
 
   # save information

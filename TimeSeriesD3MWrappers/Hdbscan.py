@@ -7,13 +7,13 @@ from typing import List
 
 import hdbscan
 from sklearn.cluster import DBSCAN
-
+from d3m.primitive_interfaces.transformer import TransformerPrimitiveBase
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
-from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
+from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, dataframe_utils
 from .timeseries_formatter import TimeSeriesFormatterPrimitive
 
 __author__ = 'Distil'
@@ -21,10 +21,7 @@ __version__ = '1.0.2'
 __contact__ = 'mailto:nklabs@newknowledge.com'
 
 Inputs = container.dataset.Dataset
-Outputs = container.dataset.Dataset
-
-class Params(params.Params):
-    pass
+Outputs = container.pandas.DataFrame
 
 class Hyperparams(hyperparams.Hyperparams):
     algorithm = hyperparams.Enumeration(default = 'HDBSCAN', 
@@ -46,7 +43,7 @@ class Hyperparams(hyperparams.Hyperparams):
        description="whether the input dataset is already formatted in long format or not")
     pass
 
-class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
+class Hdbscan(TransformerPrimitiveBase[Inputs, Outputs, Hyperparams]):
     '''
         Primitive that applies Hierarchical Density-Based Clustering or Density-Based Clustering 
         algorithms to time series data. This is an unsupervised, clustering primitive, but has been
@@ -101,73 +98,12 @@ class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-        self.train_sorted = None
 
         if self.hyperparams['algorithm'] == 'HDBSCAN':
             self.clf = hdbscan.HDBSCAN(min_cluster_size=self.hyperparams['min_cluster_size'],min_samples=self.hyperparams['min_samples'])
         else:
             self.clf = DBSCAN(eps=self.hyperparams['eps'],min_samples=self.hyperparams['min_samples'])
     
-    def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
-        '''
-        fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
-        '''
-        # sort training labels to match clusters by size in produce method
-        self.train_sorted = pandas.Series(self._y_train).value_counts().index
-        preds = self.clf.fit_predict(self._X_train)
-        self.preds_sorted = pandas.Series(preds).value_counts().index.drop(-1)
-        self.preds_sorted = self.preds_sorted[:len(self.train_sorted)]
-
-        # handle semi-supervised label case
-        if '' in self.train_sorted:
-            self.train_sorted = self.train_sorted.drop('')
-
-        return CallResult(None)
-
-    def get_params(self) -> Params:
-        return self._params
-
-    def set_params(self, *, params: Params) -> None:
-        self.params = params
-
-    def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
-        '''
-        Sets primitive's training data
-
-        Parameters
-        ----------
-        inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
-        
-        '''
-        hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-        metadata_inputs = ds2df_client.produce(inputs = inputs).value
-        if not self.hyperparams['long_format']:
-            formatted_inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
-        else:
-            formatted_inputs = ds2df_client.produce(inputs = inputs).value
-        
-        # store information on target, index variable
-        targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
-        if not len(targets):
-            targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
-        if not len(targets):
-            targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        self.target_name = list(metadata_inputs)[targets[0]]
-        index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-
-        # load and reshape training data
-        n_ts = len(formatted_inputs.d3mIndex.unique())
-        if n_ts == formatted_inputs.shape[0]:
-            self._y_train = formatted_inputs[self.target_name]
-            self._X_train = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
-            self._X_train = self._X_train[self._X_train[self.target_name] != '']
-            self._X_train = self._X_train.drop(columns = self.target_name).values
-        else:
-            ts_sz = int(formatted_inputs.shape[0] / n_ts)
-            self._X_train = np.array(formatted_inputs.value).reshape(n_ts, ts_sz)
-            self._y_train = formatted_inputs.label.iloc[::ts_sz]
-
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
         Parameters
@@ -196,52 +132,40 @@ class Hdbscan(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        target_name = list(metadata_inputs)[targets[0]]
+        target_names = [list(metadata_inputs)[t] for t in targets]
         index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
 
         # parse values from output of time series formatter
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
             X_test = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
-            X_test = X_test.drop(columns = target_name).values
+            X_test = X_test.drop(columns = target_names).values
         else:
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
             X_test = np.array(formatted_inputs.value).reshape(n_ts, ts_sz)
 
-        # cluster training and test series to produce labels
-        values = np.concatenate((self._X_train, X_test), axis=0)
-        preds = self.clf.fit_predict(values)
-        preds_sorted = pandas.Series(preds).value_counts().index.drop(-1)
-        preds_overflow = preds_sorted[len(self.train_sorted):]
-        labels = [preds_sorted[0] if (pred < 0 or pred in preds_overflow) else pred for pred in preds[self._X_train.shape[0]:]]
-        labels = [self.train_sorted[np.where(preds_sorted == p)[0][0]] for p in labels]
-
-        # add metadata to output
-        labels = pandas.DataFrame(labels)
-        target_col_name = metadata_inputs.metadata.query_column(targets[0])['name']
-        index_col_name = metadata_inputs.metadata.query_column(index[0])['name']
-        out_df = pandas.concat([pandas.DataFrame(formatted_inputs[index_col_name].unique()), labels], axis = 1)
+        # special semi-supervised case - during training, only produce rows with labels
+        series = metadata_inputs[target_names] != ''
+        if series.any().any():
+            metadata_inputs = dataframe_utils.select_rows(metadata_inputs, np.flatnonzero(series))
+            X_test = X_test[np.flatnonzero(series)]
         
-        # get column names from metadata
-        out_df.columns = [str(index_col_name), str(target_col_name)]
-        hdbscan_df = d3m_DataFrame(out_df)
+        sloth_df = d3m_DataFrame(pandas.DataFrame(self.clf.fit_predict(X_test), columns=['cluster_labels']))
+        # last column ('clusters')
+        col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
+        col_dict['structural_type'] = type(1)
+        col_dict['name'] = 'cluster_labels'
+        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute', 'https://metadata.datadrivendiscovery.org/types/CategoricalData')
+        sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
+        df_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, )))
+        df_dict_1 = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, ))) 
+        df_dict['dimension'] = df_dict_1
+        df_dict_1['name'] = 'columns'
+        df_dict_1['semantic_types'] = ('https://metadata.datadrivendiscovery.org/types/TabularColumn',)
+        df_dict_1['length'] = 1        
+        sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS,), df_dict)
         
-        # first column ('d3mIndex')
-        col_dict = dict(hdbscan_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
-        col_dict['structural_type'] = type("1")
-        col_dict['name'] = index_col_name
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
-        hdbscan_df.metadata = hdbscan_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
-        
-        # second column ('labels')
-        col_dict = dict(hdbscan_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
-        col_dict['structural_type'] = type("1")
-        col_dict['name'] = target_col_name
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
-        hdbscan_df.metadata = hdbscan_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
-
-
-        return CallResult(hdbscan_df)
+        return CallResult(utils_cp.append_columns(metadata_inputs, sloth_df))
 
 if __name__ == '__main__':
 

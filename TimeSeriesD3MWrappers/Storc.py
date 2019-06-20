@@ -12,7 +12,7 @@ from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 from d3m import container, utils
 from d3m.container import DataFrame as d3m_DataFrame
 from d3m.metadata import hyperparams, base as metadata_base, params
-from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, denormalize
+from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame, dataframe_utils
 
 from .timeseries_formatter import TimeSeriesFormatterPrimitive
 
@@ -93,32 +93,15 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0)-> None:
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
-        self._params = {}
         self._X_train = None          # training inputs
-        self._X_train_with_targets = None
-        self._y_train = None
         hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
         self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
-        self.train_sorted = None
-        self.preds_sorted = None
-        self.target_name = None
     
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
         fits Kmeans clustering algorithm using training data from set_training_data and hyperparameters
         '''
-        preds = self._kmeans.fit(self._X_train)
-        # sort training predictions and training labels, create dictionary of encodings
-        # match clusters after sorting by size
-        self.preds_sorted = pandas.Series(preds).value_counts().index
-        self.train_sorted = pandas.Series(self._y_train).value_counts().index
-        
-        # handle semi-supervised label case
-        if '' in self.train_sorted:
-            labeled_training = self._X_train_all_data[self._X_train_all_data[self.target_name] != '']
-            preds = self._kmeans.predict(labeled_training.drop(columns = self.target_name).values)
-            self.preds_sorted = pandas.Series(preds).value_counts().index
-            self.train_sorted = self.train_sorted.drop('')
+        self._kmeans.fit(self._X_train)
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -130,7 +113,6 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
         '''
         Sets primitive's training data
-
         Parameters
         ----------
         inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
@@ -150,23 +132,21 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        self.target_name = list(metadata_inputs)[targets[0]]
+        target_name = list(metadata_inputs)[targets[0]]
         index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         
         # load and reshape training data
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
             self._kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
-            self._y_train = formatted_inputs[self.target_name]
             self._X_train_all_data = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
-            self._X_train = self._X_train_all_data.drop(columns = self.target_name).values
+            self._X_train = self._X_train_all_data.drop(columns = target_name).values
         else:
             self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
-            self._y_train = formatted_inputs.label.iloc[::ts_sz]
             self._X_train = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)
 
-    def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
+    def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[container.pandas.DataFrame]:
         """
         Parameters
         ----------
@@ -185,7 +165,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if not self.hyperparams['long_format']:
             formatted_inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
         else:
-            formatted_inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)        
+            formatted_inputs = ds2df_client.produce(inputs = inputs).value 
 
         # store information on target, index variable
         targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
@@ -193,48 +173,40 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        target_name = list(metadata_inputs)[targets[0]]
+        target_names = [list(metadata_inputs)[t] for t in targets]
         index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
 
         # load and reshape training data
         n_ts = len(formatted_inputs.d3mIndex.unique())
         if n_ts == formatted_inputs.shape[0]:
             X_test = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
-            X_test = X_test.drop(columns = target_name).values
+            X_test = X_test.drop(columns = target_names).values
         else:
             ts_sz = int(formatted_inputs.shape[0] / n_ts)
             X_test = np.array(formatted_inputs.value).reshape(n_ts, ts_sz, 1)       
         
-        # map predictions back to training class labels (clusters sorted by size)
-        values = np.concatenate((self._X_train, X_test), axis=0)
-        preds = self._kmeans.predict(values)
-        preds = [self.train_sorted[np.where(self.preds_sorted == p)[0][0]] for p in preds[self._X_train.shape[0]:]]
-
-        # concatenate predictions and d3mIndex
-        labels = pandas.DataFrame(preds)
-        target_col_name = metadata_inputs.metadata.query_column(targets[0])['name']
-        index_col_name = metadata_inputs.metadata.query_column(index[0])['name']
-        out_df_sloth = pandas.concat([pandas.DataFrame(formatted_inputs[index_col_name].unique()), labels], axis = 1)
+        # special semi-supervised case - during training, only produce rows with labels
+        series = metadata_inputs[target_names] != ''
+        if series.any().any():
+            metadata_inputs = dataframe_utils.select_rows(metadata_inputs, np.flatnonzero(series))
+            X_test = X_test[np.flatnonzero(series)]
         
-        # get column names from metadata
-        out_df_sloth.columns = [str(index_col_name), str(target_col_name)]
-        sloth_df = d3m_DataFrame(out_df_sloth)
-        
-        # first column ('d3mIndex')
+        sloth_df = d3m_DataFrame(pandas.DataFrame(self._kmeans.predict(X_test), columns=['cluster_labels']))
+        # last column ('clusters')
         col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
-        col_dict['structural_type'] = type("1")
-        col_dict['name'] = index_col_name
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
+        col_dict['structural_type'] = type(1)
+        col_dict['name'] = 'cluster_labels'
+        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/Attribute', 'https://metadata.datadrivendiscovery.org/types/CategoricalData')
         sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
+        df_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, )))
+        df_dict_1 = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, ))) 
+        df_dict['dimension'] = df_dict_1
+        df_dict_1['name'] = 'columns'
+        df_dict_1['semantic_types'] = ('https://metadata.datadrivendiscovery.org/types/TabularColumn',)
+        df_dict_1['length'] = 1        
+        sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS,), df_dict)
         
-        # second column ('labels')
-        col_dict = dict(sloth_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
-        col_dict['structural_type'] = type("1")
-        col_dict['name'] = target_col_name
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
-        sloth_df.metadata = sloth_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
-
-        return CallResult(sloth_df)
+        return CallResult(utils_cp.append_columns(metadata_inputs, sloth_df))
 
 if __name__ == '__main__':
     
