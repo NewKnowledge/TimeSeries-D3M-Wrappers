@@ -26,7 +26,7 @@ pipeline_description.add_step(step_2)
 
 # Step 3, 4: Add Integer type to target column
 step_3 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.add_semantic_types.DataFrameCommon'))
-step_1.add_hyperparameter(name='semantic_types', argument_type=ArgumentType.VALUE,data=('http://schema.org/Integer',))
+step_3.add_hyperparameter(name='semantic_types', argument_type=ArgumentType.VALUE,data=('http://schema.org/Integer',))
 pipeline_description.add_step(step_3)
 
 step_4 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.operator.dataset_map.DataFrameCommon'))
