@@ -132,7 +132,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
         if not len(targets):
             targets = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        target_name = list(metadata_inputs)[targets[0]]
+        target_names = [list(metadata_inputs)[t] for t in targets]
         index = metadata_inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         
         # load and reshape training data
@@ -140,7 +140,7 @@ class Storc(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if n_ts == formatted_inputs.shape[0]:
             self._kmeans = sk_kmeans(n_clusters = self.hyperparams['nclusters'], random_state=self.random_seed)
             self._X_train_all_data = formatted_inputs.drop(columns = list(formatted_inputs)[index[0]])
-            self._X_train = self._X_train_all_data.drop(columns = target_name).values
+            self._X_train = self._X_train_all_data.drop(columns = target_names).values
         else:
             self._kmeans = KMeans(self.hyperparams['nclusters'], self.hyperparams['algorithm'])
             ts_sz = int(formatted_inputs.shape[0] / n_ts)

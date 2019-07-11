@@ -33,12 +33,11 @@ step_3.add_hyperparameter(name='return_result', argument_type=ArgumentType.VALUE
 step_3.add_hyperparameter(name='use_semantic_types', argument_type=ArgumentType.VALUE,data=True)
 pipeline_description.add_step(step_3)
 
-# Step 4: Gradient boosting classifier
-step_4 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.classification.xgboost_gbtree.DataFrameCommon'))
+# Step 4: Ensemble forest classifier
+step_4 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.learner.random_forest.DistilEnsembleForest'))
 step_4.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.3.produce')
 step_4.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.3.produce')
 step_4.add_output('produce')
-step_4.add_hyperparameter(name='return_result', argument_type=ArgumentType.VALUE,data='replace')
 pipeline_description.add_step(step_4)
 
 # Step 5: construct output
