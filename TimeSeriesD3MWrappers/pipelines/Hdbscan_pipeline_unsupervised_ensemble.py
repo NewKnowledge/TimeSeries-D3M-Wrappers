@@ -13,8 +13,9 @@ step_0.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_re
 step_0.add_output('produce')
 pipeline_description.add_step(step_0)
 
-# Step 1, 2: Map column parser to dataset
-step_1 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.column_parser.DataFrameCommon'))
+# Step 1, 2: Map SIMON semantic typing to dataset
+step_1 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_cleaning.column_type_profiler.Simon'))
+step_1.add_hyperparameter(name='overwrite', argument_type=ArgumentType.VALUE,data=True)
 pipeline_description.add_step(step_1)
 
 step_2 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.operator.dataset_map.DataFrameCommon'))
@@ -23,11 +24,9 @@ step_2.add_hyperparameter(name='primitive', argument_type= ArgumentType.PRIMITIV
 step_2.add_output('produce')
 pipeline_description.add_step(step_2)
 
-# Step 2, 3: Map Sklearn imputer to dataset
-step_3 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_cleaning.imputer.SKlearn'))
-step_3.add_hyperparameter(name='return_result', argument_type=ArgumentType.VALUE,data='replace')
-step_3.add_hyperparameter(name='use_semantic_types', argument_type=ArgumentType.VALUE,data=True)
-pipeline_description.add_step(step_3)
+# Step 3, 4: Map column parser to dataset
+step_3 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.column_parser.DataFrameCommon'))
+pipeline_description.add_step(step_1)
 
 step_4 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.operator.dataset_map.DataFrameCommon'))
 step_4.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.2.produce')
@@ -35,30 +34,42 @@ step_4.add_hyperparameter(name='primitive', argument_type= ArgumentType.PRIMITIV
 step_4.add_output('produce')
 pipeline_description.add_step(step_4)
 
-# Step 4: DISTIL/NK Storc primitive
-step_5 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.clustering.hdbscan.Hdbscan'))
-step_5.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.3.produce')
-step_5.add_hyperparameter(name='long_format', argument_type= ArgumentType.VALUE, data=True)
-step_5.add_output('produce')
+# Step 5, 6: Map Sklearn imputer to dataset
+step_5 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_cleaning.imputer.SKlearn'))
+step_5.add_hyperparameter(name='return_result', argument_type=ArgumentType.VALUE,data='replace')
+step_5.add_hyperparameter(name='use_semantic_types', argument_type=ArgumentType.VALUE,data=True)
 pipeline_description.add_step(step_5)
 
-# Step 5: XGBoost classifier
-step_6 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.classification.xgboost_gbtree.DataFrameCommon'))
+step_6 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.operator.dataset_map.DataFrameCommon'))
 step_6.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.4.produce')
-step_6.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.4.produce')
-step_6.add_hyperparameter(name='return_result', argument_type=ArgumentType.VALUE,data='replace')
+step_6.add_hyperparameter(name='primitive', argument_type= ArgumentType.PRIMITIVE, data=5)
 step_6.add_output('produce')
 pipeline_description.add_step(step_6)
 
-# Step 6: construct output
-step_7 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.construct_predictions.DataFrameCommon'))
-step_7.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.5.produce')
-step_7.add_argument(name='reference', argument_type=ArgumentType.CONTAINER, data_reference='steps.4.produce')
+# Step 4: DISTIL/NK Storc primitive
+step_7 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.clustering.hdbscan.Hdbscan'))
+step_7.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.6.produce')
+step_7.add_hyperparameter(name='long_format', argument_type= ArgumentType.VALUE, data=True)
 step_7.add_output('produce')
 pipeline_description.add_step(step_7)
 
+# Step 5: XGBoost classifier
+step_8 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.classification.xgboost_gbtree.DataFrameCommon'))
+step_8.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.7.produce')
+step_8.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.7.produce')
+step_8.add_hyperparameter(name='return_result', argument_type=ArgumentType.VALUE,data='replace')
+step_8.add_output('produce')
+pipeline_description.add_step(step_8)
+
+# Step 6: construct output
+step_9 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.construct_predictions.DataFrameCommon'))
+step_9.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.8.produce')
+step_9.add_argument(name='reference', argument_type=ArgumentType.CONTAINER, data_reference='steps.7.produce')
+step_9.add_output('produce')
+pipeline_description.add_step(step_9)
+
 # Final Output
-pipeline_description.add_output(name='output predictions', data_reference='steps.7.produce')
+pipeline_description.add_output(name='output predictions', data_reference='steps.9.produce')
 
 # Output json pipeline
 blob = pipeline_description.to_json()
