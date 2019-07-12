@@ -46,17 +46,16 @@ step_5.add_hyperparameter(name='semantic_types', argument_type=ArgumentType.VALU
 step_5.add_output('produce')
 pipeline_description.add_step(step_5)
 
-step_6 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.classification.xgboost_gbtree.DataFrameCommon'))
+step_6 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.learner.random_forest.DistilEnsembleForest'))
 step_6.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.4.produce')
 step_6.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.5.produce')
-step_6.add_hyperparameter(name='return_result', argument_type=ArgumentType.VALUE,data='replace')
 step_6.add_output('produce')
 pipeline_description.add_step(step_6)
 
 # Step 13: construct output
 step_7 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.construct_predictions.DataFrameCommon'))
 step_7.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.6.produce')
-step_7.add_argument(name='reference', argument_type=ArgumentType.CONTAINER, data_reference='steps.4.produce')
+step_7.add_argument(name='reference', argument_type=ArgumentType.CONTAINER, data_reference='steps.3.produce')
 step_7.add_output('produce')
 pipeline_description.add_step(step_7)
 
