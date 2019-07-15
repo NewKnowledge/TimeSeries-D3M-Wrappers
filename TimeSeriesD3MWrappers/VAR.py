@@ -259,7 +259,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         categories = cat.copy()
         
         # intelligently calculate grouping key order - by fewest number of unique vals after grouping
-        grouping_keys = inputs.metadata.get_columns_with_semantic_type
+        grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
         grouping_keys_counts = [inputs[:, key_idx].nunique() for key_idx in grouping_keys]
         grouping_keys = [list(inputs)[group_key] for count, group_key in sorted(zip(grouping_keys_counts, grouping_keys))]
 
