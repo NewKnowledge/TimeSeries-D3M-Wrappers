@@ -154,9 +154,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._final_logs = None
         self._cat_indices = None
         self._encoders = None
-        self._unique_index = True
-        self.filter_idx_one = None
-        self.filter_idx = None
+        self._unique_indices = []
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -252,21 +250,26 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
         inputs['temp_time_index'] = pandas.to_datetime(time_index, unit = self.hyperparams['datetime_index_unit'])
-        
+       
+        inputs.set_index('temp_time_index', inplace=True)
+
         # mark key and categorical variables
         key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
         
-        self.filter_idx_one = None
-        self.filter_idx = None
+        # intelligently calculate grouping key order - by fewest number of unique vals after grouping
+        grouping_keys = inputs.metadata.get_columns_with_semantic_type
+        grouping_keys_counts = [inputs[:, key_idx].nunique() for key_idx in grouping_keys]
+        grouping_keys = [list(inputs)[group_key] for count, group_key in sorted(zip(grouping_keys_counts, grouping_keys))]
+
+        # mark grouping keys
+        self.filter_idxs = []
+        for key in grouping_keys:
+            categories.remove(key)
+            self.filter_idxs.append(list(inputs)[key])
+
         # convert categorical variables to 1-hot encoded
-        if self.hyperparams['filter_index_one'] is not None:
-            categories.remove(self.hyperparams['filter_index_one'])
-            self.filter_idx_one = list(inputs)[self.hyperparams['filter_index_one']]
-        if self.hyperparams['filter_index_two'] is not None:
-            categories.remove(self.hyperparams['filter_index_two'])
-            self.filter_idx = list(inputs)[self.hyperparams['filter_index_two']]
         self._cat_indices = []
         self._encoders = []
         for c in categories:
@@ -275,42 +278,51 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray())
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
-        # create unique_index column if other indices
-        unique_index = inputs['temp_time_index']
-        if self.hyperparams['filter_index_one'] is not None:
-            unique_index = unique_index.astype(str).str.cat(inputs.d3mIndex.astype(str))
 
-        # drop original categorical variables, index key, and times
-        inputs.set_index('temp_time_index', inplace=True)
-        drop_idx = categories + times + key
+        # drop original categorical variables, index key
+        drop_idx = categories + key
         inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
         
-        # group data if datetime is not unique
-        if not unique_index.is_unique:
-            inputs = inputs.groupby(inputs.index).agg('sum')
-            self._unique_index = False
+        # find interpolation range from outermost grouping key
+        aggregation = {
+            'temp_time_index': {
+                'min_date': 'min',
+                'max_date': 'max'
+            }
+        }
+        interpolation_ranges = inputs.groupby(grouping_keys[0]).agg(aggregation)
+        print(interpolation_ranges, file = sys.__stdout__)
+        
+        # group by grouping keys -> group non-unique, re-index, interpolate
+        self._X_train = [None for i in range(min(grouping_keys_counts))]
+        for _, group in inputs.groupby[grouping_keys]:
+            
+            # group non-unique time indices
+            if not group['temp_time_index'].is_unique:
+                group['temp_time_index_0'] = group['temp_time_index']
+                group = group.groupby(['temp_time_index_0']).agg('sum')
+                self._unique_indices.append(False)
+            else:
+                self._unique_indices.append(True)
 
-        # for each filter value, reindex and interpolate daily values
-        if self.filter_idx_one is not None:
-            year_dfs = list(inputs.groupby([self.filter_idx_one]))
-            year_dfs = [year[1].drop(columns = self.filter_idx_one) for year in year_dfs]
-        else:
-            year_dfs = [inputs]
-        if self.filter_idx is not None:
-            company_dfs = [list(year.groupby([self.filter_idx])) for year in year_dfs]
-            company_dfs = [[company[1].drop(columns=self.filter_idx) for company in year] for year in company_dfs]
-        else:
-            company_dfs = [year_dfs]
-        reind = [[company.reindex(pandas.date_range(min(year[0].index), max(year[0].index))) if min(year[0].index.year) == max(year[0].index.year)
-                      else company for company in year] for year in company_dfs]
-        interpolated = [[company.astype(float).interpolate(method='time', limit_direction = 'both') for company in year] for year in reind]
-        self._target_lengths = [frame[0].shape[1] for frame in interpolated]
-        vals = [pandas.concat(company, axis=1) for company in interpolated]
-        self._X_train = vals
+            # re-index and interpolate
+            group.set_index('temp_time_index', inplace=True)
+            group.drop(columns = ['temp_time_index'], inplace=True)
+            group_value = group[grouping_keys[0]][0]
+            min_date = interpolation_ranges.loc[group_value]['min_date']
+            max_date = interpolation_ranges.loc[group_value]['max_date']
+            if min_date.index.year == max_date.index.year
+                group.reindex(pandas.date_range(min_date, max_date))
+                group = group.astype(float).interpolate(method='time', limit_direction = 'both') 
 
-        # update hyperparams
-        colnames = list(inputs)
+            # add to training data under appropriate top-level grouping key
+            training_idx = np.where(interpolation_ranges.index == group_value)
+            if self._X_train[training_idx] is None:
+                self._X_train[training_idx] = group
+            else:
+                self._X_train[training_idx] = pandas.concat([self._X_train[training_idx], group], axis=1)
+            print(self._X_train, file = sys.__stdout__)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
