@@ -161,6 +161,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._max_training_time_indices = []
         self.key = None
         self.interpolation_ranges = None
+        self.categories = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -259,7 +260,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         self.key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
-        categories = cat.copy()
+        self.categories = cat.copy()
         
         # mark target variables
         self._targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
@@ -273,11 +274,11 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
         grouping_keys_counts = [inputs.iloc[:, key_idx].nunique() for key_idx in grouping_keys]
         grouping_keys = [group_key for count, group_key in sorted(zip(grouping_keys_counts, grouping_keys))]
-        [categories.remove(group_key) for group_key in grouping_keys]
+        [self.categories.remove(group_key) for group_key in grouping_keys]
         self.filter_idxs = [list(inputs)[key] for key in grouping_keys]
 
         # convert categorical variables to 1-hot encoded
-        for c in categories:
+        for c in self.categories:
             encoder = OneHotEncoder(handle_unknown='ignore')
             self._encoders.append(encoder)
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
@@ -285,14 +286,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
 
         # drop original categorical variables, index key
-        inputs.drop(columns = [list(inputs)[idx] for idx in categories + self.key], inplace=True)
+        inputs.drop(columns = [list(inputs)[idx] for idx in self.categories + self.key], inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
 
         # find interpolation range from outermost grouping key
         self.interpolation_ranges = inputs.groupby(self.filter_idxs[0]).agg({'temp_time_index': ['min', 'max']})
         # group by grouping keys -> group non-unique, re-index, interpolate
         self._X_train = [None for i in range(min(grouping_keys_counts))]
-        self.unique_indices = [True for i in range(len(self._X_train ))]
+        self.unique_indices = [True for i in range(len(self._X_train))]
         for _, group in inputs.groupby(self.filter_idxs):
         
             # group non-unique time indices
@@ -338,7 +339,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # add learned time_index column
         inputs['temp_time_index'] = pandas.to_datetime(self._time_index, unit = self.hyperparams['datetime_index_unit'])
-        print(inputs.head(), file = sys.__stdout__)
+
         # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
         n_periods = [1 for i in range(len(self._X_train))]
         intervals = [None for i in range(len(self._X_train))]
@@ -355,12 +356,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 local_intervals = np.array([0])
                 idxs = np.array([0])
             else:
-                # save n_periods prediction information
                 local_intervals = group['temp_time_index'] - max_train_idx
                 local_intervals = local_intervals.days.values
                 local_intervals = [local_intervals - 1 if local_intervals > 0 else 0]
-                print(local_intervals, file = sys.__stdout__)
                 idxs = group_intervals.iloc[:, self.key].values 
+            
+            # save n_periods prediction information
             if n_periods[testing_idx] < local_intervals.max() + 1:
                 n_periods[testing_idx] = local_intervals.max() + 1
             
@@ -378,19 +379,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         print(n_periods, file = sys.__stdout__)
         print(intervals, file = sys.__stdout__)
         print(d3m_indices, file = sys.__stdout__)
-
-        # # sort test dataset by filter_index_one and filter_index if they exist to get correct ordering of d3mIndex
-        # if self.filter_idx_one is not None and self.filter_idx is not None:
-        #     inputs = inputs.sort_values(by = [self.filter_idx_one, self.filter_idx])
-        # elif self.hyperparams['filter_index_one']:
-        #     inputs = inputs.sort_values(by = self.filter_idx_one)
-        # elif self.hyperparams['filter_index_two']:
-        #     inputs = inputs.sort_values(by = self.filter_idx)
-
-        # # take d3m index from input test set
-        # index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-        # output_df = pandas.DataFrame(inputs.iloc[:, index[0]].values)
-        # output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR / ARMA
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], n) if vals.shape[1] > 1 \
@@ -403,9 +391,29 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecasts = [future_forecast.apply(lambda x: x + minimum - 1) if lag == 1 else future_forecast for future_forecast, minimum, lag \
                  in zip(future_forecasts, self._mins, self._lag_order)]
 
-        print(future_forecasts[0], file = sys.__stdout__)
-        print(intervals[0], file = sys.__stdout__)
-        print(d3m_indices[0], file = sys.__stdout__)
+        # convert categorical columns back to categorical labels
+        for forecast in final_forecasts:
+            for one_hot_cat, original_cat, enc, unique in zip(self._cat_indices, self.categories, self._encoders, self.unique_indices):
+                if unique:
+                    # round categoricals
+                    forecast[one_hot_cat] = forecast[one_hot_cat].apply(lambda x: x >= 1.5).astype(int)
+                    # convert to categorical labels
+                    forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast[one_hot_cat].values)
+                    # remove one-hot encoded columns
+                    forecast.drop(columns = one_hot_cat, inplace = True)
+                else:
+                    # round categoricals to whole numbers
+                    forecast[one_hot_cat] = forecast[one_hot_cat].astype(int)
+
+        # TODO: robust for multiple targets (ACLED)
+        # select predictions to return based on intervals
+        key_names = [list(inputs)[k] for k in self.key]
+        var_df = pd.DataFrame([], columns = key_names + self._targets)
+        for forecast, interval, idxs in zip(future_forecasts, intervals, d3m_indices):
+            for row, col, d3m_idx in zip(interval, range(len(interval)), idxs):
+                var_df.loc[var_df.shape[0]] = [d3m_idx, forecast.iloc[row,col]]
+        print(var_df.head(), file = sys.__stdout__)
+
         # # filter forecast according to interval, resahpe according to filter_name
         # final_forecasts = []
         # idx = None 
@@ -424,56 +432,31 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         #         final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
         #     else:
         #         final_forecasts.append(future_forecast)
-        
-        # convert categorical columns back to categorical labels
-        original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
-        if self.hyperparams['filter_index_one'] is not None:
-            original_cat.remove(self.hyperparams['filter_index_one'])
-        if self.hyperparams['filter_index_two'] is not None:
-            original_cat.remove(self.hyperparams['filter_index_two'])
-        for forecast in final_forecasts:
-            for one_hot_cat, original_cat, enc in zip(self._cat_indices, original_cat, self._encoders):
-                if self._unique_index:
-                    # round categoricals
-                    forecast[one_hot_cat] = forecast[one_hot_cat].apply(lambda x: x >= 1.5).astype(int)
-                    # convert to categorical labels
-                    forecast[list(inputs)[original_cat]] = enc.inverse_transform(forecast[one_hot_cat].values)
-                    # remove one-hot encoded columns
-                    forecast.drop(columns = one_hot_cat, inplace = True)
-                else:
-                    # round categoricals to whole numbers
-                    forecast[one_hot_cat] = forecast[one_hot_cat].astype(int)
 
-        targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
-        if not len(targets):
-            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')  
-        if not len(targets):
-            targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        
-        # select desired columns to return
-        if not self._unique_index:
-            colnames = list(self._X_train[0])
-            times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
-                inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
-            times = list(set(times))
+        # # select desired columns to return
+        # if not self._unique_index:
+        #     colnames = list(self._X_train[0])
+        #     times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
+        #         inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
+        #     times = list(set(times))
 
-            # broadcast predictions
-            pred_times = np.flip(inputs.iloc[:,times[0]].unique())
-            unique_counts = [inputs.iloc[:,times[0]].value_counts()[p] for p in pred_times]
-            final_forecasts = [f.loc[f.index.repeat(unique_counts)].reset_index(drop=True) for f in final_forecasts]
-            target_names = [c for c in colnames for t in targets if inputs.metadata.query_column(t)['name'] in c]
-        else:
-            target_names = [inputs.metadata.query_column(target)['name'] for target in targets]
-            if self.hyperparams['filter_index_one'] is not None or self.hyperparams['filter_index_two'] is not None:
-                final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
-                colnames = list(set(self._X_train[0]))
-            else:
-                colnames = list(self._X_train[0])
-        future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
-        future_forecast.columns = colnames
-        future_forecast = future_forecast[target_names]
-        # combine d3mIndex and predictions
-        output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
+        #     # broadcast predictions
+        #     pred_times = np.flip(inputs.iloc[:,times[0]].unique())
+        #     unique_counts = [inputs.iloc[:,times[0]].value_counts()[p] for p in pred_times]
+        #     final_forecasts = [f.loc[f.index.repeat(unique_counts)].reset_index(drop=True) for f in final_forecasts]
+        #     target_names = [c for c in colnames for t in targets if inputs.metadata.query_column(t)['name'] in c]
+        # else:
+        #     target_names = [inputs.metadata.query_column(target)['name'] for target in targets]
+        #     if self.hyperparams['filter_index_one'] is not None or self.hyperparams['filter_index_two'] is not None:
+        #         final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
+        #         colnames = list(set(self._X_train[0]))
+        #     else:
+        #         colnames = list(self._X_train[0])
+        # future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
+        # future_forecast.columns = colnames
+        # future_forecast = future_forecast[target_names]
+        # # combine d3mIndex and predictions
+        # output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
         var_df = d3m_DataFrame(output_df)
         
         # first column ('d3mIndex')
@@ -484,6 +467,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
         #('predictions')
+        # TODO: assign integer / float semantic type based on input targets value
         for index, name in zip(range(1, len(future_forecast.columns)), future_forecast.columns):
             col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
             col_dict['structural_type'] = type("1")
