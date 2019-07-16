@@ -256,9 +256,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 self._time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
         inputs['temp_time_index'] = pandas.to_datetime(self._time_index, unit = self.hyperparams['datetime_index_unit'])
-        inputs.set_index('temp_time_index', inplace=True)
 
-        # mark key and categorical variables
         self.key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
@@ -287,8 +285,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
 
         # drop original categorical variables, index key
-        drop_idx = categories + self.key
-        inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
+        inputs.drop(columns = [list(inputs)[idx] for idx in categories + self.key], inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
 
         # find interpolation range from outermost grouping key
@@ -297,7 +294,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._X_train = [None for i in range(min(grouping_keys_counts))]
         self.unique_indices = [True for i in range(len(self._X_train ))]
         for _, group in inputs.groupby(self.filter_idxs):
-
+        
             # group non-unique time indices
             if not group['temp_time_index'].is_unique:
                 group['temp_time_index_0'] = group['temp_time_index']
@@ -312,7 +309,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             if min_date.year == max_date.year:
                 group = group.reindex(pandas.date_range(min_date, max_date))
                 group[self._targets] = group[self._targets].astype(float).interpolate(method='time', limit_direction = 'both')
-            
             # add to training data under appropriate top-level grouping key
             self._max_training_time_indices.append(group.index.max())
             training_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
@@ -342,22 +338,31 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # add learned time_index column
         inputs['temp_time_index'] = pandas.to_datetime(self._time_index, unit = self.hyperparams['datetime_index_unit'])
-
+        print(inputs.head(), file = sys.__stdout__)
         # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
-        n_periods = [None for i in range(len(self._X_train))]
+        n_periods = [1 for i in range(len(self._X_train))]
         intervals = [None for i in range(len(self._X_train))]
         d3m_indices = [None for i in range(len(self._X_train))]
         for _, group in inputs.groupby(self.filter_idxs):
-            
-            group_value = group[self.filter_idxs[0]][0]
+
+            group_value = group[self.filter_idxs[0]].values[0]
             testing_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
             max_train_idx = self._X_train[testing_idx].index.max()
             group_intervals = group[group['temp_time_index'] > max_train_idx]
-
-            # save n_periods prediction information
-            local_intervals = (group_intervals['temp_time_index'] - max_train_idx).days.values
-            if n_periods[testing_idx] < local_intervals.max()
-                n_periods[testing_idx] = local_intervals.max()
+            
+            # test for empty series (train setting)
+            if group_intervals.shape[0] == 0:
+                local_intervals = np.array([0])
+                idxs = np.array([0])
+            else:
+                # save n_periods prediction information
+                local_intervals = group['temp_time_index'] - max_train_idx
+                local_intervals = local_intervals.days.values
+                local_intervals = [local_intervals - 1 if local_intervals > 0 else 0]
+                print(local_intervals, file = sys.__stdout__)
+                idxs = group_intervals.iloc[:, self.key].values 
+            if n_periods[testing_idx] < local_intervals.max() + 1:
+                n_periods[testing_idx] = local_intervals.max() + 1
             
             # save interval prediction information
             if intervals[testing_idx] is None:
@@ -367,9 +372,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
             # save d3m indices prediction information
             if d3m_indices[testing_idx] is None:
-                d3m_indices[testing_idx] = [group_intervals.iloc[:, self.key].values]
+                d3m_indices[testing_idx] = [idxs]
             else:
-                d3m_indices[testing_idx].append(group_intervals.iloc[:, self.key].values)
+                d3m_indices[testing_idx].append(idxs)
         print(n_periods, file = sys.__stdout__)
         print(intervals, file = sys.__stdout__)
         print(d3m_indices, file = sys.__stdout__)
@@ -395,7 +400,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
             else np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
-        future_forecasts = [future_forecast.apply(lambda x: x + min - 1) if lag == 1 else future_forecast for future_forecast, minimum, lag \
+        future_forecasts = [future_forecast.apply(lambda x: x + minimum - 1) if lag == 1 else future_forecast for future_forecast, minimum, lag \
                  in zip(future_forecasts, self._mins, self._lag_order)]
 
         print(future_forecasts[0], file = sys.__stdout__)
