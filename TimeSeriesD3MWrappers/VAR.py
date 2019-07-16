@@ -149,12 +149,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._X_train = None
         self._mins = None
         self._lag_order = None
-        self._values = None 
+        self._values = None
         self._fits = None
         self._final_logs = None
         self._cat_indices = None
         self._encoders = None
-        self._unique_indices = []
+        self._filter_idxs = None
+        self._targets = None
+        self._time_index = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -239,18 +241,17 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             elif len(times) > 1:
                 raise ValueError("There are multiple indices marked as datetime values. You must specify which index to use")
             else:
-                time_index = inputs.iloc[:,times[0]]
-        elif len(self.hyperparams['datetime_index']) > 1:
-            time_index = ''
-            for idx in self.hyperparams['datetime_index']:
-                time_index = time_index + ' ' + inputs.iloc[:,idx].astype(str)
+                self._time_index = inputs.iloc[:,times[0]]
+        # elif len(self.hyperparams['datetime_index']) > 1:
+        #     self._time_index = ''
+        #     for idx in self.hyperparams['datetime_index']:
+        #         self._time_index = self._time_index + ' ' + inputs.iloc[:,idx].astype(str)
         else:
             if self.hyperparams['datetime_index'][0] not in times:
                 raise ValueError("The index you provided is not marked as a datetime value.")
             else:
-                time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
-        inputs['temp_time_index'] = pandas.to_datetime(time_index, unit = self.hyperparams['datetime_index_unit'])
-       
+                self._time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
+        inputs['temp_time_index'] = pandas.to_datetime(self._time_index, unit = self.hyperparams['datetime_index_unit'])
         inputs.set_index('temp_time_index', inplace=True)
 
         # mark key and categorical variables
@@ -258,16 +259,20 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
         
+        # mark target variables
+        self._targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/TrueTarget')
+        if not len(self._targets):
+            self._targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Target')
+        if not len(self._targets):
+            self._targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        self._targets = [list(inputs)[t] for t in self._targets]
+
         # intelligently calculate grouping key order - by fewest number of unique vals after grouping
         grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
-        grouping_keys_counts = [inputs[:, key_idx].nunique() for key_idx in grouping_keys]
-        grouping_keys = [list(inputs)[group_key] for count, group_key in sorted(zip(grouping_keys_counts, grouping_keys))]
-
-        # mark grouping keys
-        self.filter_idxs = []
-        for key in grouping_keys:
-            categories.remove(key)
-            self.filter_idxs.append(list(inputs)[key])
+        grouping_keys_counts = [inputs.iloc[:, key_idx].nunique() for key_idx in grouping_keys]
+        grouping_keys = [group_key for count, group_key in sorted(zip(grouping_keys_counts, grouping_keys))]
+        [categories.remove(group_key) for group_key in grouping_keys]
+        self.filter_idxs = [list(inputs)[key] for key in grouping_keys]
 
         # convert categorical variables to 1-hot encoded
         self._cat_indices = []
@@ -283,46 +288,34 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         drop_idx = categories + key
         inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
-        
+
         # find interpolation range from outermost grouping key
-        aggregation = {
-            'temp_time_index': {
-                'min_date': 'min',
-                'max_date': 'max'
-            }
-        }
-        interpolation_ranges = inputs.groupby(grouping_keys[0]).agg(aggregation)
-        print(interpolation_ranges, file = sys.__stdout__)
-        
+        interpolation_ranges = inputs.groupby(self.filter_idxs[0]).agg({'temp_time_index': ['min', 'max']})
         # group by grouping keys -> group non-unique, re-index, interpolate
         self._X_train = [None for i in range(min(grouping_keys_counts))]
-        for _, group in inputs.groupby[grouping_keys]:
-            
+        for _, group in inputs.groupby(self.filter_idxs):
+
             # group non-unique time indices
             if not group['temp_time_index'].is_unique:
                 group['temp_time_index_0'] = group['temp_time_index']
                 group = group.groupby(['temp_time_index_0']).agg('sum')
-                self._unique_indices.append(False)
-            else:
-                self._unique_indices.append(True)
 
             # re-index and interpolate
             group.set_index('temp_time_index', inplace=True)
-            group.drop(columns = ['temp_time_index'], inplace=True)
-            group_value = group[grouping_keys[0]][0]
-            min_date = interpolation_ranges.loc[group_value]['min_date']
-            max_date = interpolation_ranges.loc[group_value]['max_date']
-            if min_date.index.year == max_date.index.year
-                group.reindex(pandas.date_range(min_date, max_date))
-                group = group.astype(float).interpolate(method='time', limit_direction = 'both') 
-
+            group_value = group[self.filter_idxs[0]][0]
+            min_date = interpolation_ranges.loc[group_value]['temp_time_index']['min']
+            max_date = interpolation_ranges.loc[group_value]['temp_time_index']['max']
+            if min_date.year == max_date.year:
+                group = group.reindex(pandas.date_range(min_date, max_date))
+                group[self._targets] = group[self._targets].astype(float).interpolate(method='time', limit_direction = 'both')
+            
             # add to training data under appropriate top-level grouping key
-            training_idx = np.where(interpolation_ranges.index == group_value)
+            training_idx = np.where(interpolation_ranges.index == group_value)[0][0]
             if self._X_train[training_idx] is None:
-                self._X_train[training_idx] = group
+                self._X_train[training_idx] = group[self._targets]
             else:
-                self._X_train[training_idx] = pandas.concat([self._X_train[training_idx], group], axis=1)
-            print(self._X_train, file = sys.__stdout__)
+                self._X_train[training_idx] = pandas.concat([self._X_train[training_idx], group[self._targets]], axis=1)
+
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
@@ -341,6 +334,24 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             The default is a future forecast for each of the selected input variables. This can be modified to just one output 
                 variable with the associated HP
         """
+
+        # add learned time_index column
+        inputs['temp_time_index'] = pandas.to_datetime(self._time_index, unit = self.hyperparams['datetime_index_unit'])
+
+        # groupby learned filter_idxs, extract number of periods to predict and prediction intervals
+        unique_indices = []
+        n_periods = []
+        intervals = []
+        for _, group in inputs.groupby(self.filter_idxs):
+
+            # group and mark non-unique time indices
+            if not group['temp_time_index'].is_unique:
+                group['temp_time_index_0'] = group['temp_time_index']
+                group = group.groupby(['temp_time_index_0']).agg('sum')
+                unique_indices.append(False)
+            else:
+                unique_indices.append(True)
+
 
         # sort test dataset by filter_index_one and filter_index if they exist to get correct ordering of d3mIndex
         if self.filter_idx_one is not None and self.filter_idx is not None:
