@@ -148,15 +148,19 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._params = {}
         self._X_train = None
         self._mins = None
-        self._lag_order = None
+        self._lag_order = []
         self._values = None
-        self._fits = None
+        self._fits = []
         self._final_logs = None
-        self._cat_indices = None
-        self._encoders = None
-        self._filter_idxs = None
+        self._cat_indices = []
+        self._encoders = []
+        self.filter_idxs = None
         self._targets = None
         self._time_index = None
+        self.unique_indices = None
+        self._max_training_time_indices = []
+        self.key = None
+        self.interpolation_ranges = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -164,15 +168,14 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
         
         # log transformation for standardization, difference, drop NAs
-        self._mins = [year.values.min() if year.values.min() < 0 else 0 for year in self._X_train]
-        self._values = [year.apply(lambda x: x - min + 1) for year, min in zip(self._X_train, self._mins)]
-        self._values = [np.log(year.values) for year in self._values]
-        self._final_logs = [year[-1:,] for year in self._values]
-        self._values = [np.diff(year,axis=0) for year in self._values]
+        self._mins = [sequence.values.min() if sequence.values.min() < 0 else 0 for sequence in self._X_train]
+        self._values = [sequence.apply(lambda x: x - min + 1) for sequence, min in zip(self._X_train, self._mins)]
+        self._values = [np.log(sequence.values) for sequence in self._values]
+        self._final_logs = [sequence[-1:,] for sequence in self._values]
+        self._values = [np.diff(sequence,axis=0) for sequence in self._values]
 
         models = [vector_ar(vals, dates = original.index) if vals.shape[1] > 1 \
             else Arima(self.hyperparams['seasonal'], self.hyperparams['seasonal_differencing']) for vals, original in zip(self._values, self._X_train)]
-        self._fits = []
         for vals, model, original in zip(self._values, models, self._X_train):
 
             # iteratively try fewer lags if problems with matrix decomposition
@@ -185,10 +188,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                         if lags == 0:
                             logging.debug('At least 1 coefficient is needed for prediction. Setting lag order to 1')
                             lags = 1
-                            self._lag_order = lags
+                            self._lag_order.append(lags)
                             self._fits.append(model.fit(lags))
                         else:
-                            self._lag_order = lags
+                            self._lag_order.append(lags)
                             self._fits.append(model.fit(lags))
                         break
                     except np.linalg.LinAlgError:
@@ -199,7 +202,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                     while lags > 1:
                         try:
                             self._fits.append(model.fit(lags))
-                            self._lag_order = lags
+                            self._lag_order.append(lags)
                             logging.debug('Successfully fit model with lag order {}'.format(lags))
                             break
                         except ValueError:
@@ -207,12 +210,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                             lags -=1
                     else:
                         self._fits.append(model.fit(lags))
-                        self._lag_order = lags
+                        self._lag_order.append(lags)
                         logging.debug('Successfully fit model with lag order {}'.format(lags))
             else:
                 X_train = pandas.Series(data = vals.reshape((-1,)), index = original.index[:vals.shape[0]]) 
                 model.fit(X_train)
                 self._fits.append(model)
+                self._lag_order.append(None)
         return CallResult(None)
 
     def get_params(self) -> Params:
@@ -255,7 +259,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         inputs.set_index('temp_time_index', inplace=True)
 
         # mark key and categorical variables
-        key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        self.key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         categories = cat.copy()
         
@@ -275,8 +279,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self.filter_idxs = [list(inputs)[key] for key in grouping_keys]
 
         # convert categorical variables to 1-hot encoded
-        self._cat_indices = []
-        self._encoders = []
         for c in categories:
             encoder = OneHotEncoder(handle_unknown='ignore')
             self._encoders.append(encoder)
@@ -285,32 +287,35 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
 
         # drop original categorical variables, index key
-        drop_idx = categories + key
+        drop_idx = categories + self.key
         inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
 
         # find interpolation range from outermost grouping key
-        interpolation_ranges = inputs.groupby(self.filter_idxs[0]).agg({'temp_time_index': ['min', 'max']})
+        self.interpolation_ranges = inputs.groupby(self.filter_idxs[0]).agg({'temp_time_index': ['min', 'max']})
         # group by grouping keys -> group non-unique, re-index, interpolate
         self._X_train = [None for i in range(min(grouping_keys_counts))]
+        self.unique_indices = [True for i in range(len(self._X_train ))]
         for _, group in inputs.groupby(self.filter_idxs):
 
             # group non-unique time indices
             if not group['temp_time_index'].is_unique:
                 group['temp_time_index_0'] = group['temp_time_index']
                 group = group.groupby(['temp_time_index_0']).agg('sum')
+                self.unique_indices[testing_idx] = False
 
             # re-index and interpolate
             group.set_index('temp_time_index', inplace=True)
             group_value = group[self.filter_idxs[0]][0]
-            min_date = interpolation_ranges.loc[group_value]['temp_time_index']['min']
-            max_date = interpolation_ranges.loc[group_value]['temp_time_index']['max']
+            min_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['min']
+            max_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['max']
             if min_date.year == max_date.year:
                 group = group.reindex(pandas.date_range(min_date, max_date))
                 group[self._targets] = group[self._targets].astype(float).interpolate(method='time', limit_direction = 'both')
             
             # add to training data under appropriate top-level grouping key
-            training_idx = np.where(interpolation_ranges.index == group_value)[0][0]
+            self._max_training_time_indices.append(group.index.max())
+            training_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
             if self._X_train[training_idx] is None:
                 self._X_train[training_idx] = group[self._targets]
             else:
@@ -338,63 +343,82 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # add learned time_index column
         inputs['temp_time_index'] = pandas.to_datetime(self._time_index, unit = self.hyperparams['datetime_index_unit'])
 
-        # groupby learned filter_idxs, extract number of periods to predict and prediction intervals
-        unique_indices = []
-        n_periods = []
-        intervals = []
+        # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
+        n_periods = [None for i in range(len(self._X_train))]
+        intervals = [None for i in range(len(self._X_train))]
+        d3m_indices = [None for i in range(len(self._X_train))]
         for _, group in inputs.groupby(self.filter_idxs):
+            
+            group_value = group[self.filter_idxs[0]][0]
+            testing_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
+            max_train_idx = self._X_train[testing_idx].index.max()
+            group_intervals = group[group['temp_time_index'] > max_train_idx]
 
-            # group and mark non-unique time indices
-            if not group['temp_time_index'].is_unique:
-                group['temp_time_index_0'] = group['temp_time_index']
-                group = group.groupby(['temp_time_index_0']).agg('sum')
-                unique_indices.append(False)
+            # save n_periods prediction information
+            local_intervals = (group_intervals['temp_time_index'] - max_train_idx).days.values
+            if n_periods[testing_idx] < local_intervals.max()
+                n_periods[testing_idx] = local_intervals.max()
+            
+            # save interval prediction information
+            if intervals[testing_idx] is None:
+                intervals[testing_idx] = [local_intervals]
             else:
-                unique_indices.append(True)
+                intervals[testing_idx].append(local_intervals)
 
+            # save d3m indices prediction information
+            if d3m_indices[testing_idx] is None:
+                d3m_indices[testing_idx] = [group_intervals.iloc[:, self.key].values]
+            else:
+                d3m_indices[testing_idx].append(group_intervals.iloc[:, self.key].values)
+        print(n_periods, file = sys.__stdout__)
+        print(intervals, file = sys.__stdout__)
+        print(d3m_indices, file = sys.__stdout__)
 
-        # sort test dataset by filter_index_one and filter_index if they exist to get correct ordering of d3mIndex
-        if self.filter_idx_one is not None and self.filter_idx is not None:
-            inputs = inputs.sort_values(by = [self.filter_idx_one, self.filter_idx])
-        elif self.hyperparams['filter_index_one']:
-            inputs = inputs.sort_values(by = self.filter_idx_one)
-        elif self.hyperparams['filter_index_two']:
-            inputs = inputs.sort_values(by = self.filter_idx)
+        # # sort test dataset by filter_index_one and filter_index if they exist to get correct ordering of d3mIndex
+        # if self.filter_idx_one is not None and self.filter_idx is not None:
+        #     inputs = inputs.sort_values(by = [self.filter_idx_one, self.filter_idx])
+        # elif self.hyperparams['filter_index_one']:
+        #     inputs = inputs.sort_values(by = self.filter_idx_one)
+        # elif self.hyperparams['filter_index_two']:
+        #     inputs = inputs.sort_values(by = self.filter_idx)
 
-        # take d3m index from input test set
-        index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-        output_df = pandas.DataFrame(inputs.iloc[:, index[0]].values)
-        output_df.columns = [inputs.metadata.query_column(index[0])['name']]
+        # # take d3m index from input test set
+        # index = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
+        # output_df = pandas.DataFrame(inputs.iloc[:, index[0]].values)
+        # output_df.columns = [inputs.metadata.query_column(index[0])['name']]
         
         # produce future foecast using VAR / ARMA
-        future_forecasts = [fit.forecast(vals[-fit.k_ar:], self.hyperparams['n_periods']) if vals.shape[1] > 1 \
-            else fit.predict(self.hyperparams['n_periods']) for fit, vals in zip(self._fits, self._values)]
+        future_forecasts = [fit.forecast(vals[-fit.k_ar:], n) if vals.shape[1] > 1 \
+            else fit.predict(n) for fit, vals, n in zip(self._fits, self._values, n_periods)]
         
         # undo differencing transformations 
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
             else np.exp(future_forecast.cumsum(axis=0) + final_logs) for future_forecast, final_logs in zip(future_forecasts, self._final_logs)]
         future_forecasts = [pandas.DataFrame(future_forecast) for future_forecast in future_forecasts]
-        if self._lag_order == 1:
-            future_forecasts = [future_forecast.apply(lambda x: x + min - 1) for future_forecast, min in zip(future_forecasts, self._mins)]
+        future_forecasts = [future_forecast.apply(lambda x: x + min - 1) if lag == 1 else future_forecast for future_forecast, minimum, lag \
+                 in zip(future_forecasts, self._mins, self._lag_order)]
 
-        # filter forecast according to interval, resahpe according to filter_name
-        final_forecasts = []
-        idx = None 
-        if self.hyperparams['datetime_interval_exception']:
-            idx = np.where(np.sort(inputs[self.filter_idx_one].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
-        if self.hyperparams['specific_intervals'] is None:
-            specific_intervals = np.repeat(None, len(future_forecasts))
-        else:
-            specific_intervals = self.hyperparams['specific_intervals']
-        for future_forecast, ind, specific_interval in zip(future_forecasts, range(len(future_forecasts)), specific_intervals):
-            if specific_interval is not None:
-                final_forecasts.append(future_forecast.iloc[specific_interval,:])
-            if ind == idx:
-                final_forecasts.append(future_forecast.iloc[0:1,:])
-            elif self.hyperparams['interval']:
-                final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
-            else:
-                final_forecasts.append(future_forecast)
+        print(future_forecasts[0], file = sys.__stdout__)
+        print(intervals[0], file = sys.__stdout__)
+        print(d3m_indices[0], file = sys.__stdout__)
+        # # filter forecast according to interval, resahpe according to filter_name
+        # final_forecasts = []
+        # idx = None 
+        # if self.hyperparams['datetime_interval_exception']:
+        #     idx = np.where(np.sort(inputs[self.filter_idx_one].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
+        # if self.hyperparams['specific_intervals'] is None:
+        #     specific_intervals = np.repeat(None, len(future_forecasts))
+        # else:
+        #     specific_intervals = self.hyperparams['specific_intervals']
+        # for future_forecast, ind, specific_interval in zip(future_forecasts, range(len(future_forecasts)), specific_intervals):
+        #     if specific_interval is not None:
+        #         final_forecasts.append(future_forecast.iloc[specific_interval,:])
+        #     if ind == idx:
+        #         final_forecasts.append(future_forecast.iloc[0:1,:])
+        #     elif self.hyperparams['interval']:
+        #         final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
+        #     else:
+        #         final_forecasts.append(future_forecast)
         
         # convert categorical columns back to categorical labels
         original_cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
