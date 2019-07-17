@@ -155,6 +155,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._cat_indices = []
         self._encoders = []
         self.filter_idxs = None
+        self._target_types = None
         self._targets = None
         self._time_index = None
         self.unique_indices = None
@@ -268,6 +269,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             self._targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Target')
         if not len(self._targets):
             self._targets = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
+        self._target_types = ['i' if 'http://schema.org/Integer' in inputs.metadata.query_column(t)['semantic_types'] \
+                              else 'c' if 'https://metadata.datadrivendiscovery.org/types/CategoricalData' in \
+                              inputs.metadata.query_column(t)['semantic_types'] else 'f' for t in self._targets]
         self._targets = [list(inputs)[t] for t in self._targets]
 
         # intelligently calculate grouping key order - by fewest number of unique vals after grouping
@@ -413,69 +417,32 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             for row, col, d3m_idx in zip(interval, range(len(interval)), idxs):
                 for r, i in zip(row, d3m_idx):
                     var_df.loc[var_df.shape[0]] = [i, forecast[col][r]]
+        var_df = d3m_DataFrame(var_df)
         print(var_df.head(), file = sys.__stdout__)
         print(var_df.shape, file = sys.__stdout__)
-
-        # # filter forecast according to interval, resahpe according to filter_name
-        # final_forecasts = []
-        # idx = None 
-        # if self.hyperparams['datetime_interval_exception']:
-        #     idx = np.where(np.sort(inputs[self.filter_idx_one].astype(int).unique()) == int(self.hyperparams['datetime_interval_exception']))[0][0]
-        # if self.hyperparams['specific_intervals'] is None:
-        #     specific_intervals = np.repeat(None, len(future_forecasts))
-        # else:
-        #     specific_intervals = self.hyperparams['specific_intervals']
-        # for future_forecast, ind, specific_interval in zip(future_forecasts, range(len(future_forecasts)), specific_intervals):
-        #     if specific_interval is not None:
-        #         final_forecasts.append(future_forecast.iloc[specific_interval,:])
-        #     if ind == idx:
-        #         final_forecasts.append(future_forecast.iloc[0:1,:])
-        #     elif self.hyperparams['interval']:
-        #         final_forecasts.append(future_forecast.iloc[self.hyperparams['interval'] - 1::self.hyperparams['interval'],:])
-        #     else:
-        #         final_forecasts.append(future_forecast)
-
-        # # select desired columns to return
-        # if not self._unique_index:
-        #     colnames = list(self._X_train[0])
-        #     times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
-        #         inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
-        #     times = list(set(times))
-
-        #     # broadcast predictions
-        #     pred_times = np.flip(inputs.iloc[:,times[0]].unique())
-        #     unique_counts = [inputs.iloc[:,times[0]].value_counts()[p] for p in pred_times]
-        #     final_forecasts = [f.loc[f.index.repeat(unique_counts)].reset_index(drop=True) for f in final_forecasts]
-        #     target_names = [c for c in colnames for t in targets if inputs.metadata.query_column(t)['name'] in c]
-        # else:
-        #     target_names = [inputs.metadata.query_column(target)['name'] for target in targets]
-        #     if self.hyperparams['filter_index_one'] is not None or self.hyperparams['filter_index_two'] is not None:
-        #         final_forecasts = [future_forecast.values.reshape((-1,len(targets)), order='F') for future_forecast in final_forecasts]
-        #         colnames = list(set(self._X_train[0]))
-        #     else:
-        #         colnames = list(self._X_train[0])
-        # future_forecast = pandas.DataFrame(np.concatenate(final_forecasts))
-        # future_forecast.columns = colnames
-        # future_forecast = future_forecast[target_names]
-        # # combine d3mIndex and predictions
-        # output_df = pandas.concat([output_df, future_forecast], axis=1, join='inner')
-        var_df = d3m_DataFrame(output_df)
         
         # first column ('d3mIndex')
         col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
-        col_dict['name'] = inputs.metadata.query_column(index[0])['name']
+        col_dict['name'] = key_names[0]
         col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
         var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
-        #('predictions')
+        # assign target metadata and round appropriately 
         # TODO: assign integer / float semantic type based on input targets value
-        for index, name in zip(range(1, len(future_forecast.columns)), future_forecast.columns):
+        for (index, name), target_type in zip(enumerate(self._targets), self._target_types):
             col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
             col_dict['structural_type'] = type("1")
             col_dict['name'] = name
-            col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', \
+            col_dict['semantic_types'] = ('https://metadata.datadrivendiscovery.org/types/SuggestedTarget', \
                 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
+            if target_type == 'i':
+                var_df[name] = var_df[name].astype(int)
+                col_dict['semantic_types'] += ('http://schema.org/Integer',)
+            elif target_type == 'c':
+                col_dict['semantic_types'] += ('https://metadata.datadrivendiscovery.org/types/CategoricalData',)
+            else:
+                col_dict['semantic_types'] += ('http://schema.org/Float',)
             var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index), col_dict)
         
         return CallResult(var_df)
