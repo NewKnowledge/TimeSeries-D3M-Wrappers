@@ -240,7 +240,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # set datetime index
         self.times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
                 inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
-        self.times = list(set(times))
+        self.times = list(set(self.times))
         if len(self.times) != 1:
             raise ValueError(f"There are {len(self.times)} indices marked as datetime values. You must specify one index to use using +\
                              'datetime_index' hyperparameter.")
@@ -252,9 +252,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         else:
             # extract month, day, year components from datetime column
             int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs.iloc[:,self.times[0]]]
-            int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols]])
+            int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols])
             max_cols = int_cols.max(axis=0)
-            int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]]
+            int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]
             if int_cols.shape[1] == 2:
                 # check if datetime order is month-day or month-year
                 if int_cols[:,1].max() > 31:
@@ -317,7 +317,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             max_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['max']
             if min_date.year == max_date.year:
                 group = group.reindex(pandas.date_range(min_date, max_date))
-                group[self._targets] = group[self._targets].astype(float).interpolate(method='time', limit_direction = 'both')
+                group[self._targets] = group[self._targets].interpolate(method='time', limit_direction = 'both')
             # add to training data under appropriate top-level grouping key
             self._max_training_time_indices.append(group.index.max())
             training_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
@@ -455,13 +455,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             col_dict['name'] = name
             col_dict['semantic_types'] = ('https://metadata.datadrivendiscovery.org/types/SuggestedTarget', \
                 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
-            if target_type == 'i':
-                var_df[name] = var_df[name].astype(int)
-                col_dict['semantic_types'] += ('http://schema.org/Integer',)
-            elif target_type == 'c':
-                col_dict['semantic_types'] += ('https://metadata.datadrivendiscovery.org/types/CategoricalData',)
-            else:
-                col_dict['semantic_types'] += ('http://schema.org/Float',)
+            # if target_type == 'i':
+            #     var_df[name] = var_df[name].astype(int)
+            #     col_dict['semantic_types'] += ('http://schema.org/Integer',)
+            # elif target_type == 'c':
+            #     col_dict['semantic_types'] += ('https://metadata.datadrivendiscovery.org/types/CategoricalData',)
+            # else:
+            #     col_dict['semantic_types'] += ('http://schema.org/Float',)
             var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index + 1), col_dict)
         
         return CallResult(var_df)
