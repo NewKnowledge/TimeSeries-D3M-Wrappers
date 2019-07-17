@@ -157,7 +157,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self.filter_idxs = None
         self._target_types = None
         self._targets = None
-        self._time_index = None
+        self.times = None
         self.unique_indices = None
         self._max_training_time_indices = []
         self.key = None
@@ -238,26 +238,30 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
 
         # set datetime index
-        times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
+        self.times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
                 inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
-        times = list(set(times))
-        if len(self.hyperparams['datetime_index']) == 0:
-            if len(times) == 0:
-                raise ValueError("There are no indices marked as datetime values.")
-            elif len(times) > 1:
-                raise ValueError("There are multiple indices marked as datetime values. You must specify which index to use")
-            else:
-                self._time_index = inputs.iloc[:,times[0]]
-        # elif len(self.hyperparams['datetime_index']) > 1:
-        #     self._time_index = ''
-        #     for idx in self.hyperparams['datetime_index']:
-        #         self._time_index = self._time_index + ' ' + inputs.iloc[:,idx].astype(str)
+        self.times = list(set(times))
+        if len(self.times) != 1:
+            raise ValueError(f"There are {len(self.times)} indices marked as datetime values. You must specify one index to use using +\
+                             'datetime_index' hyperparameter.")
+
+        # if datetime columns are integers, parse as # of days
+        # TODO: if max value <= 12 could try parsing as months? seems unnecessary for now
+        if 'http://schema.org/Integer' in inputs.metadata.query_column(self.times[0])['semantic_types']:
+            inputs['temp_time_index'] = pandas.to_datetime(inputs.iloc[:,self.times[0]] - 1, units = 'D')
         else:
-            if self.hyperparams['datetime_index'][0] not in times:
-                raise ValueError("The index you provided is not marked as a datetime value.")
-            else:
-                self._time_index = inputs.iloc[:,self.hyperparams['datetime_index']]
-        inputs['temp_time_index'] = pandas.to_datetime(self._time_index, unit = self.hyperparams['datetime_index_unit'])
+            # extract month, day, year components from datetime column
+            int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs.iloc[:,self.times[0]]]
+            int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols]])
+            max_cols = int_cols.max(axis=0)
+            int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]]
+            if int_cols.shape[1] == 2:
+                # check if datetime order is month-day or month-year
+                if int_cols[:,1].max() > 31:
+                    int_cols = np.insert(int_cols,1,1,axis=1)
+                else:
+                    int_cols = np.insert(int_cols,2,1970,axis=1)
+            inputs['temp_time_index'] = pandas.to_datetime(['/'.join(map(str, v)) for v in int_cols], infer_datetime_format=True)
 
         self.key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
@@ -341,8 +345,23 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 variable with the associated HP
         """
 
-        # add learned time_index column
-        inputs['temp_time_index'] = pandas.to_datetime(self._time_index, unit = self.hyperparams['datetime_index_unit'])
+        # parse datetime indices
+        # if datetime columns are integers, parse as # of days
+        if 'http://schema.org/Integer' in inputs.metadata.query_column(self.times[0])['semantic_types']:
+            inputs['temp_time_index'] = pandas.to_datetime(inputs.iloc[:,self.times[0]] - 1, units = 'D')
+        else:
+            # extract month, day, year components from datetime column
+            int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs.iloc[:,self.times[0]]]
+            int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols]])
+            max_cols = int_cols.max(axis=0)
+            int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]]
+            if int_cols.shape[1] == 2:
+                # check if datetime order is month-day or month-year
+                if int_cols[:,1].max() > 31:
+                    int_cols = np.insert(int_cols,1,1,axis=1)
+                else:
+                    int_cols = np.insert(int_cols,2,1970,axis=1)
+            inputs['temp_time_index'] = pandas.to_datetime(['/'.join(map(str, v)) for v in int_cols], infer_datetime_format=True)
 
         # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
         n_periods = [1 for i in range(len(self._X_train))]
@@ -431,7 +450,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # assign target metadata and round appropriately 
         # TODO: assign integer / float semantic type based on input targets value
         for (index, name), target_type in zip(enumerate(self._targets), self._target_types):
-            col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index)))
+            col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index + 1)))
             col_dict['structural_type'] = type("1")
             col_dict['name'] = name
             col_dict['semantic_types'] = ('https://metadata.datadrivendiscovery.org/types/SuggestedTarget', \
@@ -443,7 +462,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 col_dict['semantic_types'] += ('https://metadata.datadrivendiscovery.org/types/CategoricalData',)
             else:
                 col_dict['semantic_types'] += ('http://schema.org/Float',)
-            var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index), col_dict)
+            var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index + 1), col_dict)
         
         return CallResult(var_df)
 
