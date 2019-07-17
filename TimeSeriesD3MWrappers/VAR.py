@@ -392,7 +392,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                  in zip(future_forecasts, self._mins, self._lag_order)]
 
         # convert categorical columns back to categorical labels
-        for forecast in final_forecasts:
+        for forecast in future_forecasts:
             for one_hot_cat, original_cat, enc, unique in zip(self._cat_indices, self.categories, self._encoders, self.unique_indices):
                 if unique:
                     # round categoricals
@@ -408,11 +408,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # TODO: robust for multiple targets (ACLED)
         # select predictions to return based on intervals
         key_names = [list(inputs)[k] for k in self.key]
-        var_df = pd.DataFrame([], columns = key_names + self._targets)
+        var_df = pandas.DataFrame([], columns = key_names + self._targets)
         for forecast, interval, idxs in zip(future_forecasts, intervals, d3m_indices):
             for row, col, d3m_idx in zip(interval, range(len(interval)), idxs):
-                var_df.loc[var_df.shape[0]] = [d3m_idx, forecast.iloc[row,col]]
+                for r, i in zip(row, d3m_idx):
+                    var_df.loc[var_df.shape[0]] = [i, forecast[col][r]]
         print(var_df.head(), file = sys.__stdout__)
+        print(var_df.shape, file = sys.__stdout__)
 
         # # filter forecast according to interval, resahpe according to filter_name
         # final_forecasts = []
