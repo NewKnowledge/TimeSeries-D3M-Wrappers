@@ -346,7 +346,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
 
         # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
-        n_periods, intervals, d3m_indices = self._calculate_prediction_intervals(grouping_keys)
+        n_periods, intervals, d3m_indices = self._calculate_prediction_intervals(inputs, grouping_keys)
         print(n_periods, file = sys.__stdout__)
         print(intervals, file = sys.__stdout__)
         print(d3m_indices, file = sys.__stdout__)
@@ -454,7 +454,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         return CallResult(pandas.DataFrame(vals, columns = cols, index = idx))
 
     def _calculate_prediction_intervals(self,
-                                        grouping_keys = typing.Sequence[int]) -> typing.Tuple[typing.Sequence[int], 
+                                        inputs: Inputs,
+                                        grouping_keys: typing.Sequence[int]) -> typing.Tuple[typing.Sequence[int], 
                                                                                             typing.Sequence[typing.Sequence[int]],
                                                                                             typing.Sequence[typing.Sequence[typing.Any]]]:
         
@@ -475,7 +476,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 testing_idx = 0
             max_train_idx = self._X_train[testing_idx].index.max()
-            local_intervals = _discretize_time_difference(group[self.times[0]] - max_train_idx)
+            local_intervals = self._discretize_time_difference(group[self.times[0]] - max_train_idx)
 
             # test for empty series (train setting)
             if max(local_intervals) <= 0:
@@ -511,27 +512,23 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         MINUTES_PER_HOUR = 60
         HOURS_PER_DAY = 24
         DAYS_PER_WEEK = 7
-        MAX_DAYS_PER_MONTH = 31
+        DAYS_PER_MONTH = [30, 31]
+        DAYS_PER_YEAR = 365
 
         # special case if differences are negative (training set)
-        print(time_differences, file = sys.__stdout__)
-        print(type(time_differences.iloc[0]), file = sys.__stdout__)
         if time_differences.iloc[0].total_seconds() < 0:
             return [0]
 
         # determine unit of differencing between first two items (could take mode over whole list?)
-        diff = time_differences.iloc[1] - time_differences.iloc[0]
-        print(diff.total_seconds(), file = sys.__stdout__)
-        print(diff.total_seconds() % SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY, file = sys.__stdout__)
-        if diff.total_seconds() % SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY == 0:
+        diff = time_differences.iloc[1] - time_differences.iloc[0] if len(time_differences) > 1 else time_differences.iloc[0]
+        if diff.total_seconds() % (SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_YEAR) == 0:
+            return time_differences.apply(lambda x: int(x.days / DAYS_PER_YEAR)).values
+        elif diff.total_seconds() % (SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_MONTH[0]) == 0 or \
+          diff.total_seconds() % (SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_MONTH[1]) == 0:
+            return time_differences.apply(lambda x: int(x.days / DAYS_PER_MONTH[0])).values
+        elif diff.total_seconds() % (SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY) == 0:
             return time_differences.apply(lambda x: x.days).values
-        elif diff.total_seconds() > SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * MAX_DAYS_PER_MONTH:
-            return time_differences.apply(lambda x: int(x.days / 365)).values
-        elif diff.total_seconds() % SECONDS_PER_MINUTE * MINUTES_PER_HOUR == 0:
+        elif diff.total_seconds() % (SECONDS_PER_MINUTE * MINUTES_PER_HOUR) == 0:
             return time_differences.apply(lambda x: x.hours).values
-        elif diff.total_seconds() % SECONDS_PER_MINUTE == 0:
+        elif diff.total_seconds() % (SECONDS_PER_MINUTE) == 0:
             return time_differences.apply(lambda x: x.seconds).values
-        elif diff.total_seconds() % SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_WEEK == 0:
-            return time_differences.apply(lambda x: x.weeks).values
-        else:
-            return time_differences.apply(lambda x: int(x.days / 30)).values
