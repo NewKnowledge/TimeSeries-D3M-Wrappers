@@ -114,24 +114,32 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
         self._params = {}
+
+        # track metadata about times, targets, indices, grouping keys
+        self.filter_idxs = None
+        self._target_types = None
+        self._targets = None
+        self.times = None
+        self.key = None
+        self.integer_time = False
+        self.target_indices = None  
+
+        # encodings of categorical variables
+        self._cat_indices = []
+        self._encoders = []
+        self.categories = None
+
+        # information about interpolation 
+        self.unique_indices = None
+        self.interpolation_ranges = None 
+
+        # data needed to fit model and reconstruct predictions
         self._X_train = None
         self._mins = None
         self._lag_order = []
         self._values = None
         self._fits = []
-        self._final_logs = None
-        self._cat_indices = []
-        self._encoders = []
-        self.filter_idxs = None
-        self._target_types = None
-        self._targets = None
-        self.times = None
-        self.unique_indices = None
-        self.key = None
-        self.interpolation_ranges = None
-        self.categories = None
-        self.integer_time = False
-        self.target_indices = None    
+        self._final_logs = None 
     
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
@@ -336,50 +344,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # intelligently calculate grouping key order - by highest number of unique vals after grouping
         grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
 
-        # check whether no grouping keys are labeled
-        if len(grouping_keys) == 0:
-            group_tuple = ((None, inputs),)
-        else:
-            group_tuple = inputs.groupby(self.filter_idxs)
-
         # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
-        n_periods = [1 for i in range(len(self._X_train))]
-        intervals = [None for i in range(len(self._X_train))]
-        d3m_indices = [None for i in range(len(self._X_train))]
-        for _, group in group_tuple:
-            if len(grouping_keys) > 0:
-                group_value = group[self.filter_idxs[0]].values[0]
-                testing_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
-            else:
-                testing_idx = 0
-            max_train_idx = self._X_train[testing_idx].index.max()
-            local_intervals = _discretize_time_difference(group[self.times[0]] - max_train_idx)
-
-            # test for empty series (train setting)
-            if max(local_intervals) <= 0:
-                local_intervals = [0]
-                idxs = [0]
-            else:
-                #TODO: grab training values for series who have index before max)
-                local_intervals = [l - 1 if l > 0 else 0 for l in local_intervals]
-                idxs = group.iloc[:, self.key[0]].values
-            
-            # save n_periods prediction information
-            if n_periods[testing_idx] < max(local_intervals) + 1:
-                n_periods[testing_idx] = max(local_intervals) + 1
-            
-            # save interval prediction information
-            if intervals[testing_idx] is None:
-                intervals[testing_idx] = [local_intervals]
-            else:
-                intervals[testing_idx].append(local_intervals)
-
-            # save d3m indices prediction information
-            if d3m_indices[testing_idx] is None:
-                d3m_indices[testing_idx] = [idxs]
-            else:
-                d3m_indices[testing_idx].append(idxs)
-
+        n_periods, intervals, d3m_indices = self._calculate_prediction_intervals(grouping_keys)
         print(n_periods, file = sys.__stdout__)
         print(intervals, file = sys.__stdout__)
         print(d3m_indices, file = sys.__stdout__)
@@ -485,6 +451,57 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             vals = coef[idx][0]
             idx = cols
         return CallResult(pandas.DataFrame(vals, columns = cols, index = idx))
+
+    def _calculate_prediction_intervals(self,
+                                        grouping_keys = typing.Sequence[int]) -> typing.Tuple[typing.Sequence[int], 
+                                                                                            typing.Sequence[typing.Sequence[int]],
+                                                                                            typing.Sequence[typing.Sequence[typing.Any]]]:
+        
+        # check whether no grouping keys are labeled
+        if len(grouping_keys) == 0:
+            group_tuple = ((None, inputs),)
+        else:
+            group_tuple = inputs.groupby(self.filter_idxs)
+
+        # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
+        n_periods = [1 for i in range(len(self._X_train))]
+        intervals = [None for i in range(len(self._X_train))]
+        d3m_indices = [None for i in range(len(self._X_train))]
+        for _, group in group_tuple:
+            if len(grouping_keys) > 0:
+                group_value = group[self.filter_idxs[0]].values[0]
+                testing_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
+            else:
+                testing_idx = 0
+            max_train_idx = self._X_train[testing_idx].index.max()
+            local_intervals = _discretize_time_difference(group[self.times[0]] - max_train_idx)
+
+            # test for empty series (train setting)
+            if max(local_intervals) <= 0:
+                local_intervals = [0]
+                idxs = [0]
+            else:
+                #TODO: grab training values for series who have index before max)
+                local_intervals = [l - 1 if l > 0 else 0 for l in local_intervals]
+                idxs = group.iloc[:, self.key[0]].values
+            
+            # save n_periods prediction information
+            if n_periods[testing_idx] < max(local_intervals) + 1:
+                n_periods[testing_idx] = max(local_intervals) + 1
+            
+            # save interval prediction information
+            if intervals[testing_idx] is None:
+                intervals[testing_idx] = [local_intervals]
+            else:
+                intervals[testing_idx].append(local_intervals)
+
+            # save d3m indices prediction information
+            if d3m_indices[testing_idx] is None:
+                d3m_indices[testing_idx] = [idxs]
+            else:
+                d3m_indices[testing_idx].append(idxs)
+        
+        return n_periods, intervals, d3m_indices
 
     @classmethod
     def _discretize_time_difference(time_differences: typing.Sequence[timedelta]) -> typing.Sequence[int]:
