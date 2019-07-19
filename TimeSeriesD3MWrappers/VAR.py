@@ -3,7 +3,7 @@ import os.path
 import numpy as np
 import pandas
 import typing
-
+import itertools
 from statsmodels.tsa.api import VAR as vector_ar
 import statsmodels.api as sm
 from Sloth.predict import Arima
@@ -163,7 +163,9 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self.key = None
         self.interpolation_ranges = None
         self.categories = None
-
+        self.integer_time = False
+        self.target_indices = None    
+    
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
         fits VAR model. Evaluates different lag orders up to maxlags, eval criterion = AIC
@@ -238,20 +240,25 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         '''
 
         # set datetime index
-        self.times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
+        times = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/Time') + \
                 inputs.metadata.get_columns_with_semantic_type('http://schema.org/DateTime')
-        self.times = list(set(self.times))
-        if len(self.times) != 1:
-            raise ValueError(f"There are {len(self.times)} indices marked as datetime values. You must specify one index to use using +\
+        times = list(set(times))
+        if len(times) != 1:
+            raise ValueError(f"There are {len(times)} indices marked as datetime values. You must specify one index to use using +\
                              'datetime_index' hyperparameter.")
-
+        self.times = [list(inputs)[t] for t in times]
+        
         # if datetime columns are integers, parse as # of days
         # TODO: if max value <= 12 could try parsing as months? seems unnecessary for now
-        if 'http://schema.org/Integer' in inputs.metadata.query_column(self.times[0])['semantic_types']:
-            inputs['temp_time_index'] = pandas.to_datetime(inputs.iloc[:,self.times[0]] - 1, units = 'D')
+        if 'http://schema.org/Integer' in inputs.metadata.query_column(times[0])['semantic_types']:
+            self.integer_time = True
+            inputs['temp_time_index'] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
         else:
+            inputs['temp_time_index'] = pandas.to_datetime(inputs[self.times[0]], unit = 's')
+            '''
             # extract month, day, year components from datetime column
-            int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs.iloc[:,self.times[0]]]
+            print(inputs.metadata.query_column(times[0]), file = sys.__stdout__)
+            int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs[self.times[0]]]
             int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols])
             max_cols = int_cols.max(axis=0)
             int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]
@@ -262,7 +269,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 else:
                     int_cols = np.insert(int_cols,2,1970,axis=1)
             inputs['temp_time_index'] = pandas.to_datetime(['/'.join(map(str, v)) for v in int_cols], infer_datetime_format=True)
-
+            '''
         self.key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         self.categories = cat.copy()
@@ -278,55 +285,82 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                               inputs.metadata.query_column(t)['semantic_types'] else 'f' for t in self._targets]
         self._targets = [list(inputs)[t] for t in self._targets]
 
-        # intelligently calculate grouping key order - by fewest number of unique vals after grouping
+        # intelligently calculate grouping key order - by highest number of unique vals after grouping
         grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
         grouping_keys_counts = [inputs.iloc[:, key_idx].nunique() for key_idx in grouping_keys]
         grouping_keys = [group_key for count, group_key in sorted(zip(grouping_keys_counts, grouping_keys))]
-        [self.categories.remove(group_key) for group_key in grouping_keys]
+        grouping_keys.reverse()
         self.filter_idxs = [list(inputs)[key] for key in grouping_keys]
-
+        
         # convert categorical variables to 1-hot encoded
+        [self.categories.remove(group_key) for group_key in grouping_keys]
         for c in self.categories:
             encoder = OneHotEncoder(handle_unknown='ignore')
             self._encoders.append(encoder)
             encoder.fit(inputs.iloc[:,c].values.reshape(-1,1))
             inputs[list(inputs)[c] + '_' + encoder.categories_[0]] = pandas.DataFrame(encoder.transform(inputs.iloc[:,c].values.reshape(-1,1)).toarray())
             self._cat_indices.append(np.arange(inputs.shape[1] - len(encoder.categories_[0]), inputs.shape[1]))
-
+        
         # drop original categorical variables, index key
-        inputs.drop(columns = [list(inputs)[idx] for idx in self.categories + self.key], inplace=True)
+        drop_idx = self.categories + self.key
+        inputs.drop(columns = [list(inputs)[idx] for idx in drop_idx], inplace=True)
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
 
-        # find interpolation range from outermost grouping key
-        self.interpolation_ranges = inputs.groupby(self.filter_idxs[0]).agg({'temp_time_index': ['min', 'max']})
-        # group by grouping keys -> group non-unique, re-index, interpolate
-        self._X_train = [None for i in range(min(grouping_keys_counts))]
-        self.unique_indices = [True for i in range(len(self._X_train))]
-        for _, group in inputs.groupby(self.filter_idxs):
-        
-            # group non-unique time indices
-            if not group['temp_time_index'].is_unique:
-                group['temp_time_index_0'] = group['temp_time_index']
-                group = group.groupby(['temp_time_index_0']).agg('sum')
-                self.unique_indices[testing_idx] = False
-
-            # re-index and interpolate
-            group.set_index('temp_time_index', inplace=True)
-            group_value = group[self.filter_idxs[0]][0]
-            min_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['min']
-            max_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['max']
-            if min_date.year == max_date.year:
-                group = group.reindex(pandas.date_range(min_date, max_date))
-                group[self._targets] = group[self._targets].interpolate(method='time', limit_direction = 'both')
-            # add to training data under appropriate top-level grouping key
-            self._max_training_time_indices.append(group.index.max())
-            training_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
-            if self._X_train[training_idx] is None:
-                self._X_train[training_idx] = group[self._targets]
+        # check whether no grouping keys are labeled
+        print(len(grouping_keys), file = sys.__stdout__)
+        if len(grouping_keys) == 0:
+            if sum(inputs['temp_time_index'].duplicated()) > 0:
+                inputs['temp_time_index_0'] = inputs['temp_time_index']
+                inputs= inputs.groupby(['temp_time_index_0']).agg('sum')
+                self.unique_indices = [False]
             else:
-                self._X_train[training_idx] = pandas.concat([self._X_train[training_idx], group[self._targets]], axis=1)
+                self.unique_indices = [True]
+            inputs = inputs.set_index('temp_time_index')
+            inputs = inputs.interpolate(method='time', limit_direction = 'both')
+            train = inputs.drop(columns = self.times)
+            self._X_train = [train]
+            print(self._X_train, file = sys.__stdout__)
+            self.target_indices = [i for i, col_name in enumerate(list(train)) if col_name in self._targets]
 
-
+        else:
+            # find interpolation range from outermost grouping key
+            self.interpolation_ranges = inputs.groupby(self.filter_idxs[0]).agg({'temp_time_index': ['min', 'max']})
+            print(self.interpolation_ranges, file = sys.__stdout__)
+        
+            # group by grouping keys -> group non-unique, re-index, interpolate
+            self._X_train = [None for i in range(max(grouping_keys_counts))]
+            self.unique_indices = [True for i in range(len(self._X_train))]
+            for _, group in inputs.groupby(self.filter_idxs):
+                group_value = group[self.filter_idxs[0]].values[0]
+                interpolation_range = self.interpolation_ranges.loc[group_value]
+                training_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
+                group = group.drop(columns = self.filter_idxs + self.times)    
+                self.target_indices = [i for i, col_name in enumerate(list(group)) if col_name in self._targets]
+                
+                # group non-unique time indices
+                if sum(group['temp_time_index'].duplicated()) > 0:
+                    group['temp_time_index_0'] = group['temp_time_index']
+                    group = group.groupby(['temp_time_index_0']).agg('sum')
+                    self.unique_indices[training_idx] = False
+                    print('DUPLICATES!!', file = sys.__stdout__)
+                    print(group.head(), file = sys.__stdout__)
+            
+                # re-index and interpolate
+                group = group.set_index('temp_time_index')
+                min_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['min']
+                max_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['max']
+                if min_date.year == max_date.year:
+                    group = group.reindex(pandas.date_range(min_date, max_date))
+                group = group.interpolate(method='time', limit_direction = 'both')
+            
+                # add to training data under appropriate top-level grouping key
+                # necessary?
+                self._max_training_time_indices.append(group.index.max())
+                if self._X_train[training_idx] is None:
+                    self._X_train[training_idx] = group
+                else:
+                    self._X_train[training_idx] = pandas.concat([self._X_train[training_idx], group], axis=1)
+    
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
 
         """
@@ -347,14 +381,16 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # parse datetime indices
         # if datetime columns are integers, parse as # of days
-        if 'http://schema.org/Integer' in inputs.metadata.query_column(self.times[0])['semantic_types']:
-            inputs['temp_time_index'] = pandas.to_datetime(inputs.iloc[:,self.times[0]] - 1, units = 'D')
+        if self.integer_time:   
+            inputs['temp_time_index'] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
         else:
+            inputs['temp_time_index'] = pandas.to_datetime(inputs[self.times[0]], unit = 's')
+            '''
             # extract month, day, year components from datetime column
-            int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs.iloc[:,self.times[0]]]
-            int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols]])
+            int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs[self.times[0]]]
+            int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols])
             max_cols = int_cols.max(axis=0)
-            int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]]
+            int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]
             if int_cols.shape[1] == 2:
                 # check if datetime order is month-day or month-year
                 if int_cols[:,1].max() > 31:
@@ -362,31 +398,45 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 else:
                     int_cols = np.insert(int_cols,2,1970,axis=1)
             inputs['temp_time_index'] = pandas.to_datetime(['/'.join(map(str, v)) for v in int_cols], infer_datetime_format=True)
+            '''
+        # intelligently calculate grouping key order - by highest number of unique vals after grouping
+        grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
+
+        # check whether no grouping keys are labeled
+        if len(grouping_keys) == 0:
+            group_tuple = ((None, inputs),)
+        else:
+            group_tuple = inputs.groupby(self.filter_idxs)
 
         # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
         n_periods = [1 for i in range(len(self._X_train))]
         intervals = [None for i in range(len(self._X_train))]
         d3m_indices = [None for i in range(len(self._X_train))]
-        for _, group in inputs.groupby(self.filter_idxs):
-
-            group_value = group[self.filter_idxs[0]].values[0]
-            testing_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
+        for _, group in group_tuple:
+            if len(grouping_keys) > 0:
+                group_value = group[self.filter_idxs[0]].values[0]
+                testing_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
+            else:
+                testing_idx = 0
             max_train_idx = self._X_train[testing_idx].index.max()
-            group_intervals = group[group['temp_time_index'] > max_train_idx]
+            time_differences = group['temp_time_index'] - max_train_idx
+            ## TODO: smarter function to calculate lambda function
+            local_intervals = time_differences.apply(lambda x: x.days).values
+            if max(local_intervals) > inputs.shape[0]:
+                local_intervals = time_differences.apply(lambda x: int(x.days / 365)).values
             
             # test for empty series (train setting)
-            if group_intervals.shape[0] == 0:
-                local_intervals = np.array([0])
-                idxs = np.array([0])
+            if max(local_intervals) <= 0:
+                local_intervals = [0]
+                idxs = [0]
             else:
-                local_intervals = group['temp_time_index'] - max_train_idx
-                local_intervals = local_intervals.days.values
-                local_intervals = [local_intervals - 1 if local_intervals > 0 else 0]
-                idxs = group_intervals.iloc[:, self.key].values 
+                #TODO: grab training values for series who have index before max)
+                local_intervals = [l - 1 if l > 0 else 0 for l in local_intervals]
+                idxs = group.iloc[:, self.key[0]].values
             
             # save n_periods prediction information
-            if n_periods[testing_idx] < local_intervals.max() + 1:
-                n_periods[testing_idx] = local_intervals.max() + 1
+            if n_periods[testing_idx] < max(local_intervals) + 1:
+                n_periods[testing_idx] = max(local_intervals) + 1
             
             # save interval prediction information
             if intervals[testing_idx] is None:
@@ -402,10 +452,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         print(n_periods, file = sys.__stdout__)
         print(intervals, file = sys.__stdout__)
         print(d3m_indices, file = sys.__stdout__)
-        
+        print(inputs.head(), file = sys.__stdout__) 
         # produce future foecast using VAR / ARMA
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], n) if vals.shape[1] > 1 \
-            else fit.predict(n) for fit, vals, n in zip(self._fits, self._values, n_periods)]
+            else fit.predict(int(n)) for fit, vals, n in zip(self._fits, self._values, n_periods)]
         
         # undo differencing transformations 
         future_forecasts = [np.exp(future_forecast.cumsum(axis=0) + final_logs).T if len(future_forecast.shape) is 1 \
@@ -435,11 +485,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         for forecast, interval, idxs in zip(future_forecasts, intervals, d3m_indices):
             for row, col, d3m_idx in zip(interval, range(len(interval)), idxs):
                 for r, i in zip(row, d3m_idx):
-                    var_df.loc[var_df.shape[0]] = [i, forecast[col][r]]
+                    cols = [col + t for t in self.target_indices]
+                    var_df.loc[var_df.shape[0]] = [i, *forecast.iloc[r][cols].values]
         var_df = d3m_DataFrame(var_df)
-        print(var_df.head(), file = sys.__stdout__)
-        print(var_df.shape, file = sys.__stdout__)
-        
+        var_df.iloc[:,0] = var_df.iloc[:,0].astype(int)        
         # first column ('d3mIndex')
         col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
@@ -455,15 +504,16 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             col_dict['name'] = name
             col_dict['semantic_types'] = ('https://metadata.datadrivendiscovery.org/types/SuggestedTarget', \
                 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
-            # if target_type == 'i':
-            #     var_df[name] = var_df[name].astype(int)
-            #     col_dict['semantic_types'] += ('http://schema.org/Integer',)
-            # elif target_type == 'c':
-            #     col_dict['semantic_types'] += ('https://metadata.datadrivendiscovery.org/types/CategoricalData',)
-            # else:
-            #     col_dict['semantic_types'] += ('http://schema.org/Float',)
+            if target_type == 'i':
+                var_df[name] = var_df[name].astype(int)
+                col_dict['semantic_types'] += ('http://schema.org/Integer',)
+            elif target_type == 'c':
+                col_dict['semantic_types'] += ('https://metadata.datadrivendiscovery.org/types/CategoricalData',)
+            else:
+                col_dict['semantic_types'] += ('http://schema.org/Float',)
             var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index + 1), col_dict)
-        
+        print(var_df.head(), file = sys.__stdout__)
+        print(var_df.shape, file = sys.__stdout__)  
         return CallResult(var_df)
 
     
