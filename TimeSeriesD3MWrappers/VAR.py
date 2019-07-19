@@ -269,8 +269,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 self.unique_indices = [True]
             inputs = inputs.set_index(self.times[0])
             inputs = inputs.interpolate(method='time', limit_direction = 'both')
-            self._X_train = [train]
-            self.target_indices = [i for i, col_name in enumerate(list(train)) if col_name in self._targets]
+            self._X_train = [inputs]
+            self.target_indices = [i for i, col_name in enumerate(list(inputs)) if col_name in self._targets]
 
         else:
             # find interpolation range from outermost grouping key
@@ -284,7 +284,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 interpolation_range = self.interpolation_ranges.loc[group_value]
                 training_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
                 group = group.drop(columns = self.filter_idxs)    
-                self.target_indices = [i for i, col_name in enumerate(list(group)) if col_name in self._targets]
                 
                 # group non-unique time indices
                 if sum(group[self.times[0]].duplicated()) > 0:
@@ -302,7 +301,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 group = group.interpolate(method='time', limit_direction = 'both')
             
                 # add to training data under appropriate top-level grouping key
-                # necessary?
+                self.target_indices = [i for i, col_name in enumerate(list(group)) if col_name in self._targets]
                 if self._X_train[training_idx] is None:
                     self._X_train[training_idx] = group
                 else:
@@ -328,10 +327,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # parse datetime indices
         # if datetime columns are integers, parse as # of days
-        if self.integer_time:   
-            inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
-        else:
-            inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]], unit = 's')
+        print(type(inputs[self.times[0]][0]), file = sys.__stdout__)
+        if type(inputs[self.times[0]][0]) is not pandas._libs.tslibs.timestamps.Timestamp:
+            if self.integer_time:   
+                inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
+            else:
+                inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]], unit = 's')
 
         # intelligently calculate grouping key order - by highest number of unique vals after grouping
         grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
@@ -353,11 +354,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 testing_idx = 0
             max_train_idx = self._X_train[testing_idx].index.max()
-            local_intervals = _discretize_time_difference(group[self.times[0]] - max_train_idx)
+            local_intervals = self._discretize_time_difference(group[self.times[0]] - max_train_idx)
 
             # test for empty series (train setting)
-            if max(local_intervals) <= 0:
-                local_intervals = [0]
+            if max(local_intervals) == 0:
                 idxs = [0]
             else:
                 #TODO: grab training values for series who have index before max)
@@ -487,7 +487,7 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         return CallResult(pandas.DataFrame(vals, columns = cols, index = idx))
 
     @classmethod
-    def _discretize_time_difference(time_differences: typing.Sequence[timedelta]) -> typing.Sequence[int]:
+    def _discretize_time_difference(cls, time_differences: typing.Sequence[timedelta]) -> typing.Sequence[int]:
 
         SECONDS_PER_MINUTE = 60
         MINUTES_PER_HOUR = 60
@@ -495,19 +495,26 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         DAYS_PER_WEEK = 7
         MAX_DAYS_PER_MONTH = 31
 
-        # determine unit of differencing between first two items (could take mode over whole list?)
-        diff = time_differences[1] - time_differences[0]
+        # special case if differences are negative (training set)
         print(time_differences, file = sys.__stdout__)
+        print(type(time_differences.iloc[0]), file = sys.__stdout__)
+        if time_differences.iloc[0].total_seconds() < 0:
+            print('first val negative', file = sys.__stdout__)
+            return [0]
+
+        # determine unit of differencing between first two items (could take mode over whole list?)
+        diff = time_differences.iloc[1] - time_differences.iloc[0]
         print(diff, file = sys.__stdout__)
-        if diff == SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY:
+  
+        if diff.total_seconds() == SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY:
             return time_differences.apply(lambda x: x.days).values
-        elif diff > SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * MAX_DAYS_PER_MONTH:
+        elif diff.total_seconds() > SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * MAX_DAYS_PER_MONTH:
             return time_differences.apply(lambda x: int(x.days / 365)).values
-        elif diff == SECONDS_PER_MINUTE * MINUTES_PER_HOUR:
+        elif diff.total_seconds() == SECONDS_PER_MINUTE * MINUTES_PER_HOUR:
             return time_differences.apply(lambda x: x.hours).values
-        elif diff == SECONDS_PER_MINUTE:
+        elif diff.total_seconds() == SECONDS_PER_MINUTE:
             return time_differences.apply(lambda x: x.seconds).values
-        elif diff == SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_WEEK:
+        elif diff.total_seconds() == SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_WEEK:
             return time_differences.apply(lambda x: x.weeks).values
         else:
             return time_differences.apply(lambda x: int(x.days / 30)).values
