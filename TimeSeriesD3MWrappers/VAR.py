@@ -8,6 +8,7 @@ from statsmodels.tsa.api import VAR as vector_ar
 import statsmodels.api as sm
 from Sloth.predict import Arima
 from sklearn.preprocessing import OneHotEncoder
+from datetime import timedelta
 
 from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
 
@@ -37,39 +38,6 @@ class Hyperparams(hyperparams.Hyperparams):
         description='if multiple datetime indices exist, this HP specifies which to apply to training data. If \
             None, the primitive assumes there is only one datetime index. This HP can also specify multiple indices \
             which should be concatenated to form datetime_index')
-    datetime_index_unit = hyperparams.Hyperparameter[typing.Union[str, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='unit of the datetime column if datetime column is integer or float')
-    filter_index_one = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='top-level index of column in input dataset that contain unique identifiers of different time series')
-    filter_index_two = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='second-level index of column in input dataset that contain unique identifiers of different time series')
-    n_periods = hyperparams.UniformInt(
-        lower = 1, 
-        upper = sys.maxsize, 
-        default = 61, 
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-       description='number of periods to predict')
-    interval = hyperparams.Hyperparameter[typing.Union[int, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='interval with which to sample future predictions')
-    specific_intervals = hyperparams.Hyperparameter[typing.Union[typing.List[typing.List[int]], None]](
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'],
-        default=None,
-        description='defines specific prediction intervals if  different time series require different \
-            intervals for output predictions')
-    datetime_interval_exception = hyperparams.Hyperparameter[typing.Union[str, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='to handle different prediction intervals (stock market dataset). \
-            If this HP is set, primitive will just make next forecast for this datetime value \
-            (not multiple forecasts at multiple intervals')
     max_lags = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
@@ -82,11 +50,11 @@ class Hyperparams(hyperparams.Hyperparams):
     seasonal_differencing = hyperparams.UniformInt(lower = 1, upper = 365, default = 1, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
         description='period of seasonal differencing to use in ARIMA perdiction')
-    weights_filter_value = hyperparams.Hyperparameter[typing.Union[str, None]](
-        default = None,
-        semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
-        description='value to select a filter from column filter index for which to return correlation  \
-            coefficient matrix.')
+    # weights_filter_value = hyperparams.Hyperparameter[typing.Union[str, None]](
+    #     default = None,
+    #     semantic_types = ['https://metadata.datadrivendiscovery.org/types/ControlParameter'], 
+    #     description='value to select a filter from column filter index for which to return correlation  \
+    #         coefficient matrix.')
     pass
 
 class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
@@ -159,7 +127,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._targets = None
         self.times = None
         self.unique_indices = None
-        self._max_training_time_indices = []
         self.key = None
         self.interpolation_ranges = None
         self.categories = None
@@ -249,27 +216,13 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self.times = [list(inputs)[t] for t in times]
         
         # if datetime columns are integers, parse as # of days
-        # TODO: if max value <= 12 could try parsing as months? seems unnecessary for now
         if 'http://schema.org/Integer' in inputs.metadata.query_column(times[0])['semantic_types']:
             self.integer_time = True
-            inputs['temp_time_index'] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
+            inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
         else:
-            inputs['temp_time_index'] = pandas.to_datetime(inputs[self.times[0]], unit = 's')
-            '''
-            # extract month, day, year components from datetime column
-            print(inputs.metadata.query_column(times[0]), file = sys.__stdout__)
-            int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs[self.times[0]]]
-            int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols])
-            max_cols = int_cols.max(axis=0)
-            int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]
-            if int_cols.shape[1] == 2:
-                # check if datetime order is month-day or month-year
-                if int_cols[:,1].max() > 31:
-                    int_cols = np.insert(int_cols,1,1,axis=1)
-                else:
-                    int_cols = np.insert(int_cols,2,1970,axis=1)
-            inputs['temp_time_index'] = pandas.to_datetime(['/'.join(map(str, v)) for v in int_cols], infer_datetime_format=True)
-            '''
+            inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]], unit = 's')
+
+        # mark key and categorical variables
         self.key = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
         cat = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/CategoricalData')
         self.categories = cat.copy()
@@ -307,25 +260,21 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self._cat_indices = [arr - len(drop_idx) - 1 for arr in self._cat_indices]
 
         # check whether no grouping keys are labeled
-        print(len(grouping_keys), file = sys.__stdout__)
         if len(grouping_keys) == 0:
-            if sum(inputs['temp_time_index'].duplicated()) > 0:
-                inputs['temp_time_index_0'] = inputs['temp_time_index']
+            if sum(inputs[self.times[0]].duplicated()) > 0:
+                inputs['temp_time_index_0'] = inputs[self.times[0]]
                 inputs= inputs.groupby(['temp_time_index_0']).agg('sum')
                 self.unique_indices = [False]
             else:
                 self.unique_indices = [True]
-            inputs = inputs.set_index('temp_time_index')
+            inputs = inputs.set_index(self.times[0])
             inputs = inputs.interpolate(method='time', limit_direction = 'both')
-            train = inputs.drop(columns = self.times)
             self._X_train = [train]
-            print(self._X_train, file = sys.__stdout__)
             self.target_indices = [i for i, col_name in enumerate(list(train)) if col_name in self._targets]
 
         else:
             # find interpolation range from outermost grouping key
-            self.interpolation_ranges = inputs.groupby(self.filter_idxs[0]).agg({'temp_time_index': ['min', 'max']})
-            print(self.interpolation_ranges, file = sys.__stdout__)
+            self.interpolation_ranges = inputs.groupby(self.filter_idxs[0]).agg({self.times[0]: ['min', 'max']})
         
             # group by grouping keys -> group non-unique, re-index, interpolate
             self._X_train = [None for i in range(max(grouping_keys_counts))]
@@ -334,28 +283,26 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 group_value = group[self.filter_idxs[0]].values[0]
                 interpolation_range = self.interpolation_ranges.loc[group_value]
                 training_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
-                group = group.drop(columns = self.filter_idxs + self.times)    
+                group = group.drop(columns = self.filter_idxs)    
                 self.target_indices = [i for i, col_name in enumerate(list(group)) if col_name in self._targets]
                 
                 # group non-unique time indices
-                if sum(group['temp_time_index'].duplicated()) > 0:
-                    group['temp_time_index_0'] = group['temp_time_index']
+                if sum(group[self.times[0]].duplicated()) > 0:
+                    group['temp_time_index_0'] = group[self.times[0]]
                     group = group.groupby(['temp_time_index_0']).agg('sum')
                     self.unique_indices[training_idx] = False
                     print('DUPLICATES!!', file = sys.__stdout__)
                     print(group.head(), file = sys.__stdout__)
             
                 # re-index and interpolate
-                group = group.set_index('temp_time_index')
-                min_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['min']
-                max_date = self.interpolation_ranges.loc[group_value]['temp_time_index']['max']
-                if min_date.year == max_date.year:
-                    group = group.reindex(pandas.date_range(min_date, max_date))
+                group = group.set_index(self.times[0])
+                min_date = self.interpolation_ranges.loc[group_value][self.times[0]]['min']
+                max_date = self.interpolation_ranges.loc[group_value][self.times[0]]['max']
+                group = group.reindex(pandas.date_range(min_date, max_date))
                 group = group.interpolate(method='time', limit_direction = 'both')
             
                 # add to training data under appropriate top-level grouping key
                 # necessary?
-                self._max_training_time_indices.append(group.index.max())
                 if self._X_train[training_idx] is None:
                     self._X_train[training_idx] = group
                 else:
@@ -382,23 +329,10 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # parse datetime indices
         # if datetime columns are integers, parse as # of days
         if self.integer_time:   
-            inputs['temp_time_index'] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
+            inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
         else:
-            inputs['temp_time_index'] = pandas.to_datetime(inputs[self.times[0]], unit = 's')
-            '''
-            # extract month, day, year components from datetime column
-            int_cols = [["".join(x) for _, x in itertools.groupby(s, key=str.isdigit)] for s in inputs[self.times[0]]]
-            int_cols = np.array([[int(x) for x in s if x.isdigit()] for s in int_cols])
-            max_cols = int_cols.max(axis=0)
-            int_cols = int_cols[:, [np.where(m == np.sort(max_cols))[0][0] for m in max_cols]]
-            if int_cols.shape[1] == 2:
-                # check if datetime order is month-day or month-year
-                if int_cols[:,1].max() > 31:
-                    int_cols = np.insert(int_cols,1,1,axis=1)
-                else:
-                    int_cols = np.insert(int_cols,2,1970,axis=1)
-            inputs['temp_time_index'] = pandas.to_datetime(['/'.join(map(str, v)) for v in int_cols], infer_datetime_format=True)
-            '''
+            inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]], unit = 's')
+
         # intelligently calculate grouping key order - by highest number of unique vals after grouping
         grouping_keys = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedGroupingKey')
 
@@ -419,12 +353,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 testing_idx = 0
             max_train_idx = self._X_train[testing_idx].index.max()
-            time_differences = group['temp_time_index'] - max_train_idx
-            ## TODO: smarter function to calculate lambda function
-            local_intervals = time_differences.apply(lambda x: x.days).values
-            if max(local_intervals) > inputs.shape[0]:
-                local_intervals = time_differences.apply(lambda x: int(x.days / 365)).values
-            
+            local_intervals = _discretize_time_difference(group[self.times[0]] - max_train_idx)
+
             # test for empty series (train setting)
             if max(local_intervals) <= 0:
                 local_intervals = [0]
@@ -449,10 +379,12 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 d3m_indices[testing_idx] = [idxs]
             else:
                 d3m_indices[testing_idx].append(idxs)
+
         print(n_periods, file = sys.__stdout__)
         print(intervals, file = sys.__stdout__)
         print(d3m_indices, file = sys.__stdout__)
         print(inputs.head(), file = sys.__stdout__) 
+
         # produce future foecast using VAR / ARMA
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], n) if vals.shape[1] > 1 \
             else fit.predict(int(n)) for fit, vals, n in zip(self._fits, self._values, n_periods)]
@@ -478,7 +410,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                     # round categoricals to whole numbers
                     forecast[one_hot_cat] = forecast[one_hot_cat].astype(int)
 
-        # TODO: robust for multiple targets (ACLED)
         # select predictions to return based on intervals
         key_names = [list(inputs)[k] for k in self.key]
         var_df = pandas.DataFrame([], columns = key_names + self._targets)
@@ -488,7 +419,8 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                     cols = [col + t for t in self.target_indices]
                     var_df.loc[var_df.shape[0]] = [i, *forecast.iloc[r][cols].values]
         var_df = d3m_DataFrame(var_df)
-        var_df.iloc[:,0] = var_df.iloc[:,0].astype(int)        
+        var_df.iloc[:,0] = var_df.iloc[:,0].astype(int)     
+
         # first column ('d3mIndex')
         col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
         col_dict['structural_type'] = type("1")
@@ -497,7 +429,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
 
         # assign target metadata and round appropriately 
-        # TODO: assign integer / float semantic type based on input targets value
         for (index, name), target_type in zip(enumerate(self._targets), self._target_types):
             col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, index + 1)))
             col_dict['structural_type'] = type("1")
@@ -513,7 +444,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 col_dict['semantic_types'] += ('http://schema.org/Float',)
             var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index + 1), col_dict)
         print(var_df.head(), file = sys.__stdout__)
-        print(var_df.shape, file = sys.__stdout__)  
         return CallResult(var_df)
 
     
@@ -555,63 +485,29 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             vals = coef[idx][0]
             idx = cols
         return CallResult(pandas.DataFrame(vals, columns = cols, index = idx))
-    
-if __name__ == '__main__':
-    
-    
-    # # stock_market test case
-    # input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TRAIN/dataset_TRAIN/datasetDoc.json')
-    # hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    # ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-    # df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
-    
-    # # VAR primitive
-    # var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    # var = VAR(hyperparams = var_hp.defaults().replace({'datetime_index':[3,2],'filter_index_two':1, 'filter_index_one':2, 'n_periods':52, 'interval':26, 'datetime_interval_exception':'2017'}))
-    # var.set_training_data(inputs = df, outputs = None)
-    # var.fit()
-    # test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_stock_market/TEST/dataset_TEST/datasetDoc.json')
-    # results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    # #results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    # print(results.value)
-    
 
-    # # acled reduced test case
-    # input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL0_acled_reduced/TRAIN/dataset_TRAIN/datasetDoc.json')
-    # hyperparams_class = dataset_remove_columns.RemoveColumnsPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    # to_remove = (1, 2, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30)
-    # rm_client = dataset_remove_columns.RemoveColumnsPrimitive(hyperparams = hyperparams_class.defaults().replace({"columns":to_remove}))
-    # df = rm_client.produce(inputs = input_dataset).value
+    @classmethod
+    def _discretize_time_difference(time_differences: typing.Sequence[timedelta]) -> typing.Sequence[int]:
 
-    # hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    # ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-    # df = ds2df_client.produce(inputs = df).value
-    # print(df.head())
+        SECONDS_PER_MINUTE = 60
+        MINUTES_PER_HOUR = 60
+        HOURS_PER_DAY = 24
+        DAYS_PER_WEEK = 7
+        MAX_DAYS_PER_MONTH = 31
 
-    # var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    # var = VAR(hyperparams = var_hp.defaults().replace({}))
-    # var.set_training_data(inputs = df, outputs = None)
-    # var.fit()
-    # test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL0_acled_reduced/TEST/dataset_TEST/datasetDoc.json')
-    # #results = var.produce(inputs = ds2df_client.produce(inputs = rm_client.produce(inputs = test_dataset).value).value)
-    # results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    # print(results.value)
-
-
-    # population_spawn test case
-    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_population_spawn_simpler/TRAIN/dataset_TRAIN/datasetDoc.json')
-    hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-    df = d3m_DataFrame(ds2df_client.produce(inputs = input_dataset).value)
-    
-    # VAR primitive
-    var_hp = VAR.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-    var = VAR(hyperparams = var_hp.defaults().replace({'filter_index_two':1, 'filter_index_one':2, 'n_periods':25, 'interval':25, 'datetime_index_unit':'D'}))
-    var.set_training_data(inputs = df, outputs = None)
-    var.fit()
-    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/LL1_736_population_spawn_simpler/TEST/dataset_TEST/datasetDoc.json')
-    results = var.produce(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    #results = var.produce_weights(inputs = d3m_DataFrame(ds2df_client.produce(inputs = test_dataset).value))
-    print(results.value)
-    
-
+        # determine unit of differencing between first two items (could take mode over whole list?)
+        diff = time_differences[1] - time_differences[0]
+        print(time_differences, file = sys.__stdout__)
+        print(diff, file = sys.__stdout__)
+        if diff == SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY:
+            return time_differences.apply(lambda x: x.days).values
+        elif diff > SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * MAX_DAYS_PER_MONTH:
+            return time_differences.apply(lambda x: int(x.days / 365)).values
+        elif diff == SECONDS_PER_MINUTE * MINUTES_PER_HOUR:
+            return time_differences.apply(lambda x: x.hours).values
+        elif diff == SECONDS_PER_MINUTE:
+            return time_differences.apply(lambda x: x.seconds).values
+        elif diff == SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_WEEK:
+            return time_differences.apply(lambda x: x.weeks).values
+        else:
+            return time_differences.apply(lambda x: int(x.days / 30)).values
