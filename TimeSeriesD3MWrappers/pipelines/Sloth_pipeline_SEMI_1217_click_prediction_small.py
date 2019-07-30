@@ -19,6 +19,7 @@ step_1.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_re
 step_1.add_hyperparameter(name='nclusters', argument_type= ArgumentType.VALUE, data=2)
 step_1.add_hyperparameter(name='long_format', argument_type= ArgumentType.VALUE, data=True)
 step_1.add_output('produce')
+step_1.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.0.produce')
 pipeline_description.add_step(step_1)
 
 # Step 2: column_parser
