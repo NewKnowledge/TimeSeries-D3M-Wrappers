@@ -298,8 +298,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                     group['temp_time_index_0'] = group[self.times[0]]
                     group = group.groupby(['temp_time_index_0']).agg('sum')
                     self.unique_indices[training_idx] = False
-                    print('DUPLICATES!!', file = sys.__stdout__)
-                    print(group.head(), file = sys.__stdout__)
             
                 # re-index and interpolate
                 group = group.set_index(self.times[0])
@@ -335,7 +333,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # parse datetime indices
         # if datetime columns are integers, parse as # of days
-        print(type(inputs[self.times[0]][0]), file = sys.__stdout__)
         if type(inputs[self.times[0]][0]) is not pandas._libs.tslibs.timestamps.Timestamp:
             if self.integer_time:   
                 inputs[self.times[0]] = pandas.to_datetime(inputs[self.times[0]] - 1, unit = 'D')
@@ -347,10 +344,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # groupby learned filter_idxs and extract n_periods, interval and d3mIndex information
         n_periods, intervals, d3m_indices = self._calculate_prediction_intervals(inputs, grouping_keys)
-        print(n_periods, file = sys.__stdout__)
-        print(intervals, file = sys.__stdout__)
-        print(d3m_indices, file = sys.__stdout__)
-        print(inputs.head(), file = sys.__stdout__) 
 
         # produce future foecast using VAR / ARMA
         future_forecasts = [fit.forecast(vals[-fit.k_ar:], n) if vals.shape[1] > 1 \
@@ -410,7 +403,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
             else:
                 col_dict['semantic_types'] += ('http://schema.org/Float',)
             var_df.metadata = var_df.metadata.update((metadata_base.ALL_ELEMENTS, index + 1), col_dict)
-        print(var_df.head(), file = sys.__stdout__)
         return CallResult(var_df)
 
     
