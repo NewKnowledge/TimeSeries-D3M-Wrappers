@@ -6,7 +6,7 @@ from TimeSeriesD3MWrappers.timeseries_formatter import TimeSeriesFormatterPrimit
 from TimeSeriesD3MWrappers.layer_utils import AttentionLSTM
 from TimeSeriesD3MWrappers.LSTM_FCN import LSTM_FCN
 
-__version__ = '1.0.6'
+__version__ = '1.0.7'
 
 __all__ = [
            "Parrot", 

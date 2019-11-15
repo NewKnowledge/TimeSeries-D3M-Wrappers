@@ -1,14 +1,13 @@
 from setuptools import setup
 
 setup(name='TimeSeriesD3MWrappers',
-    version='1.0.6',
+    version='1.0.7',
     description='Five wrappers for interacting with New Knowledge time series tool Sloth',
     packages=['TimeSeriesD3MWrappers'],
-    install_requires=["typing",
-                      "numpy == 1.15.4",
-                      'scikit-learn == 0.20.3',
-                      'Keras == 2.2.4',
-                      "Sloth @ git+https://github.com/NewKnowledge/sloth@c331cec7f9c90642c8726f8cf673c2034493d08b#egg=Sloth-2.0.7",
+    install_requires=["numpy<=1.17.3",
+                      'scikit-learn<=0.21.3',
+                      'Keras == 2.3.1',
+                      "Sloth @ git+https://github.com/NewKnowledge/sloth@2c867f6ebba39657540f15a27f0fd466a7ce3d37#egg=Sloth-2.0.8",
                       ],
     entry_points = {
         'd3m.primitives': [

@@ -1,27 +1,23 @@
 import sys
 import os.path
 import numpy as np
-import pandas
-import typing
-from typing import List
+import pandas as pd
+import logging
+from d3m.primitive_interfaces.base import CallResult
+from d3m.primitive_interfaces.supervised_learning import SupervisedLearnerPrimitiveBase
+from d3m import container, utils
+from d3m.metadata import hyperparams, params, base as metadata_base
 
 from Sloth.classify import Knn
 
-from d3m.primitive_interfaces.base import PrimitiveBase, CallResult
-
-from d3m import container, utils
-from d3m.container import DataFrame as d3m_DataFrame
-from d3m.metadata import hyperparams, base as metadata_base, params
-from common_primitives import utils as utils_cp, dataset_to_dataframe as DatasetToDataFrame
-
-from .timeseries_formatter import TimeSeriesFormatterPrimitive
-
 __author__ = 'Distil'
-__version__ = '1.0.2'
-__contact__ = 'mailto:nklabs@newknowledge.com'
+__version__ = '1.0.3'
+__contact__ = 'mailto:jeffrey.gleason@yonder.co'
 
-Inputs = container.dataset.Dataset
-Outputs = container.dataset.Dataset
+Inputs = container.DataFrame
+Outputs = container.DataFrame
+
+logger = logging.getLogger(__name__)
 
 class Params(params.Params):
     pass
@@ -30,18 +26,14 @@ class Hyperparams(hyperparams.Hyperparams):
     n_neighbors = hyperparams.UniformInt(lower = 0, upper = sys.maxsize, default = 5, semantic_types=[
        'https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
        description='number of neighbors on which to make classification decision')
-    long_format = hyperparams.UniformBool(default = False, semantic_types = [
-       'https://metadata.datadrivendiscovery.org/types/ControlParameter'],
-       description="whether the input dataset is already formatted in long format or not")
-    pass
 
-class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
+class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     '''
         Primitive that applies the k nearest neighbor classification algorithm to time series data. 
         The tslearn KNeighborsTimeSeriesClassifier implementation is wrapped.
-    
-        Training inputs: D3M dataset with features and labels, and D3M indices
-        Outputs: D3M dataset with predicted labels and D3M indices
+
+        Training inputs: 1) Feature dataframe, 2) Label dataframe
+        Outputs: Dataframe with predictions
     '''
     metadata = metadata_base.PrimitiveMetadata({
         # Simply an UUID generated once and fixed forever. Generated using "uuid.uuid4()".
@@ -49,7 +41,7 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         'version': __version__,
         'name': "kanine",
         # Keywords do not have a controlled vocabulary. Authors can put here whatever they find suitable.
-        'keywords': ['Time Series'],
+        'keywords': ['time series', 'knn', 'k nearest neighbor', 'time series classification'],
         'source': {
             'name': __author__,
             'contact': __contact__,
@@ -63,11 +55,11 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # install a Python package first to be even able to run setup.py of another package. Or you have
         # a dependency which is not on PyPi.
          'installation': [
-             {
-                'type': metadata_base.PrimitiveInstallationType.PIP,
-                'package': 'cython',
-                'version': '0.29.7',
-             },
+            #  {
+            #     'type': metadata_base.PrimitiveInstallationType.PIP,
+            #     'package': 'cython',
+            #     'version': '0.29.7',
+            #  },
              {
             'type': metadata_base.PrimitiveInstallationType.PIP,
             'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
@@ -85,20 +77,16 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     })
 
     def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0)-> None:
+
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
-        self._params = {}
-        self._X_train = None        # training inputs
-        self._y_train = None        # training outputs
+
         self._knn = Knn(self.hyperparams['n_neighbors']) 
-        hp_class = TimeSeriesFormatterPrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-        self._hp = hp_class.defaults().replace({'file_col_index':1, 'main_resource_index':'learningData'})
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         """
         Fits KNN model using training data from set_training_data and hyperparameters
         """
 
-        # fits ARIMA model using training data from set_training_data and hyperparameters
         self._knn.fit(self._X_train, self._y_train)
         return CallResult(None)
         
@@ -106,7 +94,7 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         return self._params
 
     def set_params(self, *, params:Params) -> None:
-        self.params = params
+        self._params = params
 
     def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
         '''
@@ -114,23 +102,19 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         Parameters
         ----------
-        inputs: numpy ndarray of size (number_of_time_series, time_series_length) containing training time series
+        inputs: time series data in long format (each row is one timestep of one series)
 
-        outputs: numpy ndarray of size (number_time_series,) containing classes of training time series
+        outputs: vector / series / array containing 1 label / training time series
         '''
-        if not self.hyperparams['long_format']:
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
-        else:
-            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)
 
         # load and reshape training data
-        # 'series_id' and 'value' should be set by metadata
-        n_ts = len(inputs.d3mIndex.unique())
-        ts_sz = int(inputs.shape[0] / n_ts)
-        self._X_train = np.array(inputs.value).reshape(n_ts, ts_sz, 1)
-        self._y_train = np.array(inputs.label.iloc[::ts_sz]).reshape(-1,)
+        outputs = np.array(outputs)
+        n_ts = outputs.shape[0]
+        ts_sz = inputs.shape[0] // n_ts
+
+        # grab specific column b4 reshaping
+        self._X_train = np.array(inputs.values).reshape(n_ts, ts_sz)
+        self._y_train = np.array(outputs).reshape(-1,)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -138,60 +122,25 @@ class Kanine(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         Parameters
         ----------
-        inputs : numpy ndarray of size (number_of_time_series, time_series_length) containing new time series 
+        inputs : time series data in long format (each row is one timestep of one series)
 
         Returns
         ----------
-        Outputs
-            The output is a numpy ndarray containing a predicted class for each of the input time series
+        Outputs: The output is a dataframe with a column containing a predicted class for each input time series
         """
 
-        # temporary (until Uncharted adds conversion primitive to repo)
-        if not self.hyperparams['long_format']:
-            inputs = TimeSeriesFormatterPrimitive(hyperparams = self._hp).produce(inputs = inputs).value['0']
-        else:
-            hyperparams_class = DatasetToDataFrame.DatasetToDataFramePrimitive.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams']
-            ds2df_client = DatasetToDataFrame.DatasetToDataFramePrimitive(hyperparams = hyperparams_class.defaults().replace({"dataframe_resource":"learningData"}))
-            inputs = d3m_DataFrame(ds2df_client.produce(inputs = inputs).value)
-
-        # parse values from output of time series formatter
-        n_ts = len(inputs.d3mIndex.unique())
-        ts_sz = int(inputs.shape[0] / n_ts)
+        # load and reshape test data
+        grouping_column = inputs.metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/GroupingKey')
+        n_ts = len(inputs.iloc[:, grouping_column].unique())
+        ts_sz = inputs.shape[0] // n_ts
         input_vals = np.array(inputs.value).reshape(n_ts, ts_sz)
 
-        classes = pandas.DataFrame(self._knn.predict(input_vals))
-        output_df = pandas.concat([pandas.DataFrame(inputs.d3mIndex.unique()), classes], axis = 1)
-        # get column names from metadata
-        output_df.columns = ['d3mIndex', 'label']
-        knn_df = d3m_DataFrame(output_df)
+        # make predictions
+        preds = self._knn.predict(input_vals)
 
-        # first column ('d3mIndex')
-        col_dict = dict(knn_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
-        col_dict['structural_type'] = type("1")
-        # confirm that this metadata still exists
-        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/PrimaryKey')
-        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
-        col_dict['name'] = 'd3mIndex'
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/PrimaryKey',)
-        knn_df.metadata = knn_df.metadata.update((metadata_base.ALL_ELEMENTS, 0), col_dict)
-        # second column ('predictions')
-        col_dict = dict(knn_df.metadata.query((metadata_base.ALL_ELEMENTS, 1)))
-        col_dict['structural_type'] = type("1")
-        #index = inputs['0'].metadata.get_columns_with_semantic_type('https://metadata.datadrivendiscovery.org/types/SuggestedTarget')
-        #col_dict['name'] = inputs.metadata.query_column(index[0])['name']
-        col_dict['name'] = 'label'
-        col_dict['semantic_types'] = ('http://schema.org/Integer', 'https://metadata.datadrivendiscovery.org/types/SuggestedTarget', 'https://metadata.datadrivendiscovery.org/types/TrueTarget', 'https://metadata.datadrivendiscovery.org/types/Target')
-        knn_df.metadata = knn_df.metadata.update((metadata_base.ALL_ELEMENTS, 1), col_dict)
-        return CallResult(knn_df)
+        # create output frame
+        result_df = container.DataFrame({self.hyperparams['knn_predictions']: preds}, generate_metadata=True)
+        result_df.metadata = result_df.metadata.add_semantic_type((metadata_base.ALL_ELEMENTS, 0), 
+            'https://metadata.datadrivendiscovery.org/types/PredictedTarget')
 
-if __name__ == '__main__':
-
-    # Load data and preprocessing
-    input_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TRAIN/dataset_TRAIN/datasetDoc.json')
-    hyperparams_class = Kanine.metadata.query()['primitive_code']['class_type_arguments']['Hyperparams'] 
-    kanine_client = Kanine(hyperparams=hyperparams_class.defaults())
-    kanine_client.set_training_data(inputs = input_dataset, outputs = None)
-    kanine_client.fit()
-    test_dataset = container.Dataset.load('file:///datasets/seed_datasets_current/66_chlorineConcentration/TEST/dataset_TEST/datasetDoc.json')
-    results = kanine_client.produce(inputs = test_dataset)
-    print(results.value)
+        return CallResult(result_df, has_finished=True)
