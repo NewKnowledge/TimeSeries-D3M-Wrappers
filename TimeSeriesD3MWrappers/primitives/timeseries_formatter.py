@@ -26,6 +26,9 @@ from d3m.primitive_interfaces import base, transformer
 
 __all__ = ('TimeSeriesFormatterPrimitive',)
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Hyperparams(hyperparams.Hyperparams):
     file_col_index = hyperparams.Hyperparameter[typing.Union[int, None]](
@@ -82,12 +85,12 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
                 'contact': 'mailto:cbethune@uncharted.software',
                 'uris': ['https://gitlab.com/uncharted-distil/distil-primitives']
             },
-            'installation': [{
-                'type': metadata_base.PrimitiveInstallationType.PIP,
-                'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
-                    git_commit=d3m_utils.current_git_commit(os.path.dirname(__file__)),
-                ),
-            }],
+            # 'installation': [{
+            #     'type': metadata_base.PrimitiveInstallationType.PIP,
+            #     'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
+            #         git_commit=d3m_utils.current_git_commit(os.path.dirname(__file__)),
+            #     ),
+            # }],
             'algorithm_types': [
                 metadata_base.PrimitiveAlgorithmType.FILE_MANIPULATION,
             ],
@@ -122,16 +125,21 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
 
         # generate the long form timeseries data
         base_path = self._get_base_path(inputs.metadata, main_resource_id, file_index)
-        output_data = []
-        for idx, tRow in inputs[main_resource_id].iterrows():
-            # read the timeseries data
-            csv_path = os.path.join(base_path, tRow[file_index])
-            timeseries_row = pd.read_csv(csv_path)
-            # combine the timeseries data with the value row
-            output_data.extend([pd.concat([tRow, vRow]) for vIdx, vRow in timeseries_row.iterrows()])
-
+        import time
+        import numpy as np
+        start_time = time.time()
+        csv_paths = [os.path.join(base_path, local_path) for local_path in inputs[main_resource_id].iloc[:, file_index]]
+        new_dfs = [pd.read_csv(path) for path in csv_paths]
+        original_dfs = [pd.DataFrame(np.tile(row, (df.shape[0], 1)),
+                columns = inputs[main_resource_id].columns, index = df.index) 
+                for row, df in zip(inputs[main_resource_id].values, new_dfs)]
+        combined_dfs = [original_df.join(new_df) for original_df, new_df in zip(original_dfs, new_dfs)]
+        output_data = pd.concat(combined_dfs)
+        logger.info(f'took {time.time() - start_time} s')
         timeseries_dataframe = container.DataFrame(output_data)
-        timeseries_dataframe.reset_index(drop=True, inplace=True)
+        logger.info(timeseries_dataframe.head())
+        logger.info(timeseries_dataframe.shape)
+        #timeseries_dataframe.reset_index(drop=True, inplace=True)
 
         # create a dataset to hold the result
         timeseries_dataset = container.Dataset({self._resource_id: timeseries_dataframe}, generate_metadata=True)

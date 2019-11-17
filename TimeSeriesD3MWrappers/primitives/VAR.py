@@ -6,7 +6,7 @@ import typing
 import itertools
 from statsmodels.tsa.api import VAR as vector_ar
 import statsmodels.api as sm
-from Sloth.predict import Arima
+#from Sloth.predict import Arima
 from sklearn.preprocessing import OneHotEncoder
 from datetime import timedelta
 
@@ -88,18 +88,18 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # Of course Python packages can also have their own dependencies, but sometimes it is necessary to
         # install a Python package first to be even able to run setup.py of another package. Or you have
         # a dependency which is not on PyPi.
-         'installation': [
-            {
-            'type': metadata_base.PrimitiveInstallationType.PIP,
-            'package': 'cython',
-            'version': '0.29.7',
-            },
-            {
-            'type': metadata_base.PrimitiveInstallationType.PIP,
-            'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
-                git_commit=utils.current_git_commit(os.path.dirname(__file__)),)
-            }
-        ],
+        #  'installation': [
+        #     {
+        #     'type': metadata_base.PrimitiveInstallationType.PIP,
+        #     'package': 'cython',
+        #     'version': '0.29.7',
+        #     },
+        #     {
+        #     'type': metadata_base.PrimitiveInstallationType.PIP,
+        #     'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
+        #         git_commit=utils.current_git_commit(os.path.dirname(__file__)),)
+        #     }
+        # ],
         # The same path the primitive is registered with entry points in setup.py.
         'python_path': 'd3m.primitives.time_series_forecasting.vector_autoregression.VAR',
         # Choose these from a controlled vocabulary in the schema. If anything is missing which would
