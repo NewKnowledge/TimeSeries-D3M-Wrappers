@@ -65,8 +65,8 @@ pipeline_description.add_output(name='output predictions', data_reference='steps
 
 # Output json pipeline
 blob = pipeline_description.to_json()
-#filename = blob[8:44] + '.json'
-filename = 'pipeline.json'
+filename = blob[8:44] + '.json'
+#filename = 'pipeline.json'
 with open(filename, 'w') as outfile:
     outfile.write(blob)
 
