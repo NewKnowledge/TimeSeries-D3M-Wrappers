@@ -15,7 +15,7 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping
-from TimeSeriesD3MWrappers.models.model_utils import generate_lstmfcn, LSTMSequence
+from TimeSeriesD3MWrappers.models.model_utils import generate_lstmfcn, LSTMSequence, LSTMSequenceTest
 from sklearn.preprocessing import LabelEncoder
 
 __author__ = 'Distil'
@@ -58,7 +58,7 @@ class Hyperparams(hyperparams.Hyperparams):
     batch_size = hyperparams.UniformInt(
         lower = 1, 
         upper = 512, 
-        default = 128, 
+        default = 32, 
         upper_inclusive = True,
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'batch size')
@@ -77,8 +77,8 @@ class Hyperparams(hyperparams.Hyperparams):
             if iterations flag in `fit` method is not None')
     early_stopping_patience = hyperparams.UniformInt(
         lower = 0, 
-        upper = 100, 
-        default = 10, 
+        upper = sys.maxsize, 
+        default = 100, 
         upper_inclusive = True,
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'number of epochs to wait before invoking early stopping criterion')
@@ -148,7 +148,11 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
     def __init__(self, *, hyperparams: Hyperparams, random_seed: int = 0)-> None:
         super().__init__(hyperparams=hyperparams, random_seed=random_seed)
 
+        # set seed for reproducibility
+        tf.random.set_seed(random_seed)
+
         self._is_fit = False
+        self._new_train_data = False
 
     def get_params(self) -> Params:
         return self._params
@@ -199,12 +203,13 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
         self._class_weights = [1 / w for w in weights]
 
         # convert labels to categorical
-        self._y_train = to_categorical(y_ind, len(np.unique(y_ind)))
+        n_classes = len(np.unique(y_ind))
+        self._y_train = to_categorical(y_ind, n_classes)
 
         # instantiate classifier
         self._clf = generate_lstmfcn(
             ts_sz,
-            len(np.unique(y_train)),
+            n_classes,
             lstm_dim=self.hyperparams['lstm_dim'],
             attention=self.hyperparams['attention_lstm'],
             dropout=self.hyperparams['dropout_rate'])
@@ -212,63 +217,95 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
         # model compilation and training
         self._clf.compile(optimizer = Adam(lr=self.hyperparams['learning_rate']), 
                          loss = 'categorical_crossentropy', 
-                         metrics=['accuracy'])
+                         metrics=['acc'])
+        #self._clf.summary(print_fn = lambda x: print(x, file=sys.__stdout__))
+
+        # save weights so we can start fitting from scratch (if desired by caller)
+        self._clf.save_weights('model_initial_weights.h5')
+
+        # mark that new training data has been set
+        self._new_train_data = True
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''
         fits LSTM_FCN classifier using training data from set_training_data and hyperparameters
         '''
 
+        # restore initial model weights if new training data
+        if self._new_train_data:
+            self._clf.load_weights('model_initial_weights.h5')
+
         # break out validation set if iterations arg not set
-        train_split = 1 - self.hyperparams['val_split'] * self._X_train.shape[0]
         if iterations is None:
-            x_train = self._X_train[:int(train_split)]
-            y_train = self._y_train[:int(train_split)]
+            iterations_set = False
+            train_split = 1 - self.hyperparams['val_split'] * self._X_train.shape[0]
+            x_train = self._X_train[:int(train_split)].astype('float32')
+            y_train = self._y_train[:int(train_split)].astype('float32')
             x_val = self._X_train[int(train_split):]
             y_val = self._y_train[int(train_split):]
             val_dataset = LSTMSequence(x_val, y_val, self.hyperparams['batch_size'])
-            callbacks = [EarlyStopping(monitor='val_loss', patience=self.hyperparams['early_stopping_patience'])]
             iterations = self.hyperparams['epochs']
+            callbacks = [EarlyStopping(monitor='val_loss', 
+                patience=self.hyperparams['early_stopping_patience'], 
+                mode = 'min',
+                restore_best_weights=False)]   
         else:
+            iterations_set = True
             x_train = self._X_train
             y_train = self._y_train
             val_dataset = None
-            callbacks = [EarlyStopping(monitor='loss', patience=self.hyperparams['early_stopping_patience'])]
+            monitor_quantity = 'loss'
+            callbacks = None
+            has_finished = False
         train_dataset = LSTMSequence(x_train, y_train, self.hyperparams['batch_size'])
-        logger.info(train_dataset.X.shape)
-        logger.info(train_dataset.X.dtype)
-        logger.info(train_dataset.y.shape)
-        logger.info(train_dataset.y.dtype)
+
         # time training for 1 epoch so we can consider timeout argument thoughtfully
         if timeout:
             logger.info('Timing the fitting procedure for one epoch so we can consider timeout thoughtfully')
             start_time = time.time()
-            self._clf.fit(train_dataset, 
-                epochs = 1, 
+            self._clf.fit(train_dataset,
+                epochs = iterations, 
                 validation_data = val_dataset,
                 class_weight = self._class_weights,
+                shuffle = True,
                 use_multiprocessing = self.hyperparams['use_multiprocessing'],
                 workers = self.hyperparams['num_workers'])
             epoch_time_estimate = time.time() - start_time
             timeout_epochs = timeout // epoch_time_estimate - 1 # subract 1 more to be safe
-            iterations = min(timeout_epochs, iterations)
+            iters = min(timeout_epochs, iterations)
             start_epoch = 1 # account for one training epoch that already happened for timing purposes
         else:
+            iters = iterations
             start_epoch = 0
 
         # normal fitting
         logger.info(f'Fitting for {iterations-start_epoch} iterations')
-        self._clf.fit(train_dataset, 
-            epochs = iterations, 
+        start_time = time.time()
+        fitting_history = self._clf.fit(train_dataset, 
+            epochs = iters, 
             validation_data = val_dataset,
             class_weight = self._class_weights,
-            #use_multiprocessing = self.hyperparams['use_multiprocessing'],
-            #workers = self.hyperparams['num_workers'],
+            shuffle = True,
+            use_multiprocessing = self.hyperparams['use_multiprocessing'],
+            workers = self.hyperparams['num_workers'],
             callbacks = callbacks, 
             initial_epoch = start_epoch)
+        iterations_completed = len(fitting_history.history['loss'])
+        logger.info(f'Fit for {iterations_completed} epochs, took {time.time() - start_time}s')
+
+        # maintain primitive state (mark that training data has been used)
+        self._new_train_data = False
         self._is_fit = True
 
-        return CallResult(None, has_finished=self._is_fit, iterations = iterations)
+        # use fitting history to set CallResult return values
+        if iterations_set:
+            has_finished = False
+        elif iters < iteratins:
+            has_finished = False
+        else:
+            has_finished = self._is_fit
+
+        return CallResult(None, has_finished = has_finished, iterations_done = iterations_completed)
 
     def produce(self, *, inputs: Inputs, timeout: float = None, iterations: int = None) -> CallResult[Outputs]:
         """
@@ -292,9 +329,12 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
         n_ts = inputs.iloc[:, grouping_column[0]].nunique()
         ts_sz = inputs.shape[0] // n_ts
         x_vals = inputs.iloc[:, value_column].values.reshape(n_ts, 1, ts_sz)
+        test_dataset = LSTMSequenceTest(x_vals, self.hyperparams['batch_size'])
 
         # make predictions
-        preds = self._clf.predict(input_vals)
+        preds = self._clf.predict_generator(test_dataset, 
+            use_multiprocessing = self.hyperparams['use_multiprocessing'],
+            workers = self.hyperparams['num_workers'])
         preds = self._label_encoder.inverse_transform(np.argmax(preds, axis = 1))
 
         # create output frame
@@ -302,6 +342,7 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
         result_df.metadata = result_df.metadata.add_semantic_type((metadata_base.ALL_ELEMENTS, 0), 
             ('https://metadata.datadrivendiscovery.org/types/PredictedTarget'))
 
+        # ok to set to True because we have checked that primitive has been fit
         return CallResult(result_df, has_finished=True)
 
 

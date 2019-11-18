@@ -135,10 +135,7 @@ class TimeSeriesFormatterPrimitive(transformer.TransformerPrimitiveBase[containe
                 for row, df in zip(inputs[main_resource_id].values, new_dfs)]
         combined_dfs = [original_df.join(new_df) for original_df, new_df in zip(original_dfs, new_dfs)]
         output_data = pd.concat(combined_dfs)
-        logger.info(f'took {time.time() - start_time} s')
         timeseries_dataframe = container.DataFrame(output_data)
-        logger.info(timeseries_dataframe.head())
-        logger.info(timeseries_dataframe.shape)
         #timeseries_dataframe.reset_index(drop=True, inplace=True)
 
         # create a dataset to hold the result
