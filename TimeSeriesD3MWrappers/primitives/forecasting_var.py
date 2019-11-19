@@ -91,11 +91,6 @@ class VAR(PrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         #  'installation': [
         #     {
         #     'type': metadata_base.PrimitiveInstallationType.PIP,
-        #     'package': 'cython',
-        #     'version': '0.29.7',
-        #     },
-        #     {
-        #     'type': metadata_base.PrimitiveInstallationType.PIP,
         #     'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
         #         git_commit=utils.current_git_commit(os.path.dirname(__file__)),)
         #     }

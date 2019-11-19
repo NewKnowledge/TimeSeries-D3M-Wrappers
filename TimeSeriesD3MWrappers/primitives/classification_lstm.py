@@ -57,7 +57,7 @@ class Hyperparams(hyperparams.Hyperparams):
         description = 'learning rate')
     batch_size = hyperparams.UniformInt(
         lower = 1, 
-        upper = 512, 
+        upper = 256, 
         default = 32, 
         upper_inclusive = True,
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
@@ -79,7 +79,6 @@ class Hyperparams(hyperparams.Hyperparams):
         lower = 0, 
         upper = sys.maxsize, 
         default = 100, 
-        upper_inclusive = True,
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'number of epochs to wait before invoking early stopping criterion')
     use_multiprocessing = hyperparams.UniformBool(
@@ -254,14 +253,13 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
             x_train = self._X_train
             y_train = self._y_train
             val_dataset = None
-            monitor_quantity = 'loss'
             callbacks = None
-            has_finished = False
         train_dataset = LSTMSequence(x_train, y_train, self.hyperparams['batch_size'])
 
         # time training for 1 epoch so we can consider timeout argument thoughtfully
         if timeout:
-            logger.info('Timing the fitting procedure for one epoch so we can consider timeout thoughtfully')
+            logger.info('Timing the fitting procedure for one epoch so we \
+                can consider timeout thoughtfully')
             start_time = time.time()
             self._clf.fit(train_dataset,
                 epochs = iterations, 
@@ -279,7 +277,7 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
             start_epoch = 0
 
         # normal fitting
-        logger.info(f'Fitting for {iterations-start_epoch} iterations')
+        logger.info(f'Fitting for {iters-start_epoch} iterations')
         start_time = time.time()
         fitting_history = self._clf.fit(train_dataset, 
             epochs = iters, 

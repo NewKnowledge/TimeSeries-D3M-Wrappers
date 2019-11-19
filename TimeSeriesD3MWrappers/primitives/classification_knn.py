@@ -73,11 +73,6 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         # install a Python package first to be even able to run setup.py of another package. Or you have
         # # a dependency which is not on PyPi.
         #  'installation': [
-        #     #  {
-        #     #     'type': metadata_base.PrimitiveInstallationType.PIP,
-        #     #     'package': 'cython',
-        #     #     'version': '0.29.7',
-        #     #  },
         #      {
         #     'type': metadata_base.PrimitiveInstallationType.PIP,
         #     'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
