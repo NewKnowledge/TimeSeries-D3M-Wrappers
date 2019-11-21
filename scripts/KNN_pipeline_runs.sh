@@ -7,18 +7,15 @@ git branch classification_pipelines
 git checkout classification_pipelines
 cd /primitives/v2019.11.10/Distil/d3m.primitives.time_series_classification.k_neighbors.Kanine/1.0.3
 mkdir pipelines
-cd pipelines
+python3 "/src/timeseriesd3mwrappers/TimeSeriesD3MWrappers/pipelines/Kanine_pipeline.py"
+cd ..
 mkdir pipeline_runs
+cd pipeline_runs
 
 for i in "${Datasets[@]}"; do
 
-  # generate pipeline json
-  cd ../pipelines
-  python3 "/src/timeseriesd3mwrappers/TimeSeriesD3MWrappers/pipelines/Kanine_pipeline.py"
-
   # generate pipeline run
-  cd ../pipeline_runs
-  python3 -m d3m runtime -d /datasets/ fit-score -p pipeline.json -i /datasets/seed_datasets_current/$i/TRAIN/dataset_TRAIN/datasetDoc.json -t /datasets/seed_datasets_current/$i/TEST/dataset_TEST/datasetDoc.json -a /datasets/seed_datasets_current/$i/SCORE/dataset_SCORE/datasetDoc.json -r /datasets/seed_datasets_current/$i/LL1_terra_canopy_height_long_form_s4_100_problem/problemDoc.json -O $i.yml
+  python3 -m d3m runtime -d /datasets/ fit-score -p ../pipelines/*.json -i /datasets/seed_datasets_current/$i/TRAIN/dataset_TRAIN/datasetDoc.json -t /datasets/seed_datasets_current/$i/TEST/dataset_TEST/datasetDoc.json -a /datasets/seed_datasets_current/$i/SCORE/dataset_SCORE/datasetDoc.json -r /datasets/seed_datasets_current/$i/LL1_terra_canopy_height_long_form_s4_100_problem/problemDoc.json -O $i.yml
 
 done
 
