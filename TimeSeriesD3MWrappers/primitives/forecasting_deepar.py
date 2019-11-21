@@ -108,7 +108,7 @@ class Hyperparams(hyperparams.Hyperparams):
     val_split = hyperparams.Uniform(
         lower = 0.0, 
         upper = 1.0, 
-        default = 0.1, 
+        default = 0.2, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = """proportion of training records to set aside for validation. Ignored 
             if iterations flag in `fit` method is not None""")
