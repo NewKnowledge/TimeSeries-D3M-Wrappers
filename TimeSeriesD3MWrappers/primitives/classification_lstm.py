@@ -15,7 +15,7 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping
-from TimeSeriesD3MWrappers.models.model_utils import generate_lstmfcn, LSTMSequence, LSTMSequenceTest
+from TimeSeriesD3MWrappers.models.lstm_model_utils import generate_lstmfcn, LSTMSequence, LSTMSequenceTest
 from sklearn.preprocessing import LabelEncoder
 
 __author__ = 'Distil'
@@ -23,7 +23,7 @@ __version__ = '1.0.2'
 __contact__ = 'mailto:jeffrey.gleason@yonder.co'
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+#logger.setLevel(logging.INFO)
 
 Inputs = container.DataFrame
 Outputs = container.DataFrame
@@ -46,7 +46,7 @@ class Hyperparams(hyperparams.Hyperparams):
     epochs = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
-        default = 2000, 
+        default = 5000, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'number of training epochs')
     learning_rate = hyperparams.Uniform(
@@ -122,18 +122,13 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
         # Of course Python packages can also have their own dependencies, but sometimes it is necessary to
         # install a Python package first to be even able to run setup.py of another package. Or you have
         # a dependency which is not on PyPi.
-        #  'installation': [
-        #      {
-        #         'type': metadata_base.PrimitiveInstallationType.PIP,
-        #         'package': 'cython',
-        #         'version': '0.29.7',
-        #      },
-        #      {
-        #         'type': metadata_base.PrimitiveInstallationType.PIP,
-        #         'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
-        #             git_commit=utils.current_git_commit(os.path.dirname(__file__)),)
-        #      }
-        #  ],
+        'installation': [
+             {
+                'type': metadata_base.PrimitiveInstallationType.PIP,
+                'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
+                    git_commit=utils.current_git_commit(os.path.dirname(__file__)),)
+             }
+        ],
         # The same path the primitive is registered with entry points in setup.py.
         'python_path': 'd3m.primitives.time_series_classification.convolutional_neural_net.LSTM_FCN',
         # Choose these from a controlled vocabulary in the schema. If anything is missing which would
