@@ -5,16 +5,13 @@
 from __future__ import absolute_import
 import warnings
 
-from keras import backend as K
-from keras import activations
-from keras import initializers
-from keras import regularizers
-from keras import constraints
-from keras.engine import Layer
-from keras.engine import InputSpec
-from keras.legacy import interfaces
-from keras.layers import RNN
-
+from tensorflow.keras import backend as K
+from tensorflow.keras import activations
+from tensorflow.keras import initializers
+from tensorflow.keras import regularizers
+from tensorflow.keras import constraints
+from tensorflow.keras.layers import Layer, InputSpec, RNN
+#from tensorflow.keras.legacy import interfaces
 
 def _time_distributed_dense(x, w, b=None, dropout=None,
                             input_dim=None, output_dim=None,
@@ -515,7 +512,7 @@ class AttentionLSTM(RNN):
         - [Bahdanau, Cho & Bengio (2014), "Neural Machine Translation by Jointly Learning to Align and Translate"](https://arxiv.org/pdf/1409.0473.pdf)
         - [Xu, Ba, Kiros, Cho, Courville, Salakhutdinov, Zemel & Bengio (2016), "Show, Attend and Tell: Neural Image Caption Generation with Visual Attention"](http://arxiv.org/pdf/1502.03044.pdf)
     """
-    @interfaces.legacy_recurrent_support
+    #@interfaces.legacy_recurrent_support
     def __init__(self, units,
                  activation='tanh',
                  recurrent_activation='hard_sigmoid',

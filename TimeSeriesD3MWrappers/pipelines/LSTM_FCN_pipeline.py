@@ -43,8 +43,8 @@ step_4.add_hyperparameter(name='semantic_types', argument_type= ArgumentType.VAL
 step_4.add_output('produce')
 pipeline_description.add_step(step_4)
 
-# Step 6: KNN
-step_5 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series_classification.k_neighbors.Kanine'))
+# Step 6: LSTM_FCN
+step_5 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.time_series_classification.convolutional_neural_net.LSTM_FCN'))
 step_5.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.1.produce')
 step_5.add_argument(name='outputs', argument_type=ArgumentType.CONTAINER, data_reference='steps.4.produce')
 step_5.add_output('produce')
