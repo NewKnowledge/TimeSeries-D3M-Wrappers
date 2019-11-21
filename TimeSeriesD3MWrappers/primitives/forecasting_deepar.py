@@ -48,13 +48,13 @@ class Hyperparams(hyperparams.Hyperparams):
     epochs = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
-        default = 100, 
+        default = 1, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'number of training epochs')
     steps_per_epoch = hyperparams.UniformInt(
         lower = 5, 
         upper = 200, 
-        default = 20, 
+        default = 5, 
         upper_inclusive=True,
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'number of steps to do per epoch')
@@ -474,6 +474,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
 
         # add 1 because 0 indexed
         max_h = max(pred_intervals.apply(lambda x: max(x))) + 1
+        max_h = int(max_h)
         min_len = min(pred_intervals.apply(lambda x: len(x)))
 
         if max_h > min_len:
