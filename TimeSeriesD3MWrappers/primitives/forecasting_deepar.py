@@ -48,13 +48,13 @@ class Hyperparams(hyperparams.Hyperparams):
     epochs = hyperparams.UniformInt(
         lower = 1, 
         upper = sys.maxsize, 
-        default = 1, 
+        default = 100, 
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'number of training epochs')
     steps_per_epoch = hyperparams.UniformInt(
         lower = 5, 
         upper = 200, 
-        default = 5, 
+        default = 20, 
         upper_inclusive=True,
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'], 
         description = 'number of steps to do per epoch')
