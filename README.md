@@ -1,120 +1,38 @@
-# Sloth D3M Wrapper (Strategic Labeling Over Time Heuristics)
-Wrapper of the KMeans clustering primitive into D3M infrastructure. All code is written in Python 3.5 and must be run in 3.5 or greater. 
+# Repository of D3M wrappers for time series classification and forecasting
 
-The base Sloth library can be found here: https://github.com/NewKnowledge/sloth
+**TimeSeriesD3MWrappers/primitives**: 
 
-## Install
+D3M primitives
 
-pip3 install -e git+https://github.com/NewKnowledge/TimeSeriesD3MWrappers.git#egg=TimeSeriesD3MWrapper --process-dependency-links
+1. **classification_knn.py**: wrapper for tslearn's KNeighborsTimeSeriesClassifier algorithm 
 
-## Output
-The output is a DataFrame containing a single column where each entry is the associated series' cluster number.
+2. **classification_lstm.py**: wrapper for LSTM Fully Convolutional Networks for Time Series Classification paper, original repo (https://github.com/titu1994/MLSTM-FCN), paper (https://arxiv.org/abs/1801.04503)
 
-## Available Functions
+3. **forecasting_deepar.py**: wrapper for DeepAR recurrent, autoregressive Time Series Forecasting algorithm (https://arxiv.org/abs/1704.04110). Custom implementation repo (git+https://github.com/NewKnowledge/deepar#egg=deepar-0.0.1)
 
-#### set_training_data
+4. **forecasting_var.py**: wrapper for **statsmodels**' implementation of vector autoregression for multivariate time series
 
-Sets primitive's training data. The inputs are a numpy ndarray of size (number_of_time_series, time_series_length) containing training time series. There are no outputs.
+**TimeSeriesD3MWrappers/pipelines**: 
 
-#### fit
+Example pipelines for primitives. Latest are: 
 
-Fits clustering algorithm using training data from set_training_data and hyperparameters. There are no inputs or outputs.
+1. **forecasting_pipeline_imputer.py**: pipeline for DeepAR primitive on all forecasting datasets
 
-#### produce
-Produce primitive's best guess for the cluster number of each series. The input is a pandas frame where each row is a series. The output is a dataframe containing a single column where each entry is the associated series' cluster number.
+2. **forecasting_pipeline_var.py**: pipeline for VAR primitive on all forecasting datasets (except terra datasets)
 
-# Shallot D3M Wrapper (SHApelet Learning Over Time-Series)
-Wrapper of the Shallot Shapelet learning primitive into D3M infrastructure. All code is written in Python 3.5 and must be run in 3.5 or greater. 
+3. **Kanine_pipeline.py**: pipeline for Kanine primitive on all classification datasets
 
-The base Sloth library (which contains the Shapelet class and other time series methods) can be found here: https://github.com/NewKnowledge/sloth
+4. **LSTM_FCN_pipeline.py**: pipeline for LSTM_FCN primitive on all classification datasets
 
-## Install
+Model utils
 
-pip3 install -e git+https://github.com/NewKnowledge/TimeSeriesD3MWrappers.git#egg=TimeSeriesD3MWrapper --process-dependency-links
+1. **layer_utils.py**: implementation of AttentionLSTM in tensorflow (compatible with 2), originally from https://github.com/houshd/LSTM-FCN
 
-## Output
-The output is a numpy ndarray containing a predicted class for each of the input time series.
+2. **lstm_model_utils.py**: functions to generate LSTM_FCN model architecture and data generators
 
-## Available Functions
+3. **var_model_utils.py**: wrapper of the **auto_arima** method from **pmdarima.arima** with some specific parameters fixed
 
-#### set_training_data
 
-Sets primitive's training data. The inputs are a numpy ndarray of size (number_of_time_series, time_series_length, dimension) containing training time series
-and a numpy ndarray of size (number_time_series,) containing classes of training time series. There are no outputs.
 
-#### fit
 
-Fits Shapelet classifier using training data from set_training_data and hyperparameters. There are no inputs or outputs.
 
-#### produce
-
-Produce primitive's classifications for new time series data The input is a numpy ndarray of size (number_of_time_series, time_series_length, dimension) containing new time series. The output is a numpy ndarray containing a predicted class for each of the input time series.
-
-# Parrot D3M Wrapper (Predictive AutoRegressive Results over Time)
-Wrapper of the Parrot ARIMA primitive into D3M infrastructure. All code is written in Python 3.5 and must be run in 3.5 or greater. 
-
-The base Sloth library (which also contains other methods that can be called on time series data) can be found here: https://github.com/NewKnowledge/sloth
-
-## Install
-
-pip3 install -e git+https://github.com/NewKnowledge/TimeSeriesD3MWrappers.git#egg=TimeSeriesD3MWrapper --process-dependency-links
-
-## Output
- The output is a list of length 'n_periods' that contains a prediction for each of 'n_periods' future time periods.
-
-## Available Functions
-
-#### set_training_data
-
-Set's primitives training data. The input is a pandas data frame that contains training data in two columns. The first column contains time series indices (preferably in datetime format) and the second column contains time series values. There are no outputs. 
-
-#### fit
-
-Fits ARIMA model using trianing data from set_training_data and hyperparameters. There are no inputs or outputs. 
-
-#### produce
-Produce the primitive's prediction for future time series data. The output is a list of length 'n_periods' that contains a prediction for each of 'n_periods' future time periods. 'n_periods' is a hyperparameter that must be set before making the prediction.
-
-# Kanine D3M Wrapper (K appointed nearest interesting neighbors)
-Wrapper of the KNN time series classification primitive into D3M infrastructure. All code is written in Python 3.5 and must be run in 3.5 or greater. 
-
-The base Sloth library (which also contains other time series methods) can be found here: https://github.com/NewKnowledge/sloth
-
-## Install
-
-pip3 install -e git+https://github.com/NewKnowledge/TimeSeriesD3MWrappers.git#egg=TimeSeriesD3MWrapper --process-dependency-links
-
-## Output
-The output is a numpy ndarray containing a predicted class for each of the input time series
-
-## Available Functions
-
-#### set_training_data
-
-Sets primitive's training data. The inputs are a numpy ndarray of size (number_of_time_series, time_series_length) containing training time series. The outputs are a numpy ndarray of size (number_time_series,) containing classes of training time series.
-
-#### fit
-
-Fits KNN model using training data from set_training_data and hyperparameters. There are no inputs or outputs.
-
-#### produce
-
-Produce primitive's classifications for new time series data The input is a numpy ndarray of size (number_of_time_series, time_series_length) containing new time series. The output is a numpy ndarray containing a predicted class for each of the input time series.
-
-# Hdbscan D3M Wrapper (Hierarchical Density-Based Spatial Clustering of Applications with Noise)
-Wrapper of the DBSCAN and HDBSCAN time series clustering primitives into D3M infrastructure. All code is written in Python 3.5 and must be run in 3.5 or greater. 
-
-The base Sloth library (which also contains other time series methods) can be found here: https://github.com/NewKnowledge/sloth
-
-## Install
-
-pip3 install -e git+https://github.com/NewKnowledge/TimeSeriesD3MWrappers.git#egg=TimeSeriesD3MWrapper --process-dependency-links
-
-## Output
-The output is a numpy ndarray containing a cluster label for each of the input time series
-
-## Available Functions
-
-#### produce
-
-Produce a cluster label for each of the input time series. The inputs are a numpy ndarray of size (number_of_time_series, time_series_length) containing new time series. The output is a numpy ndarray containing a cluster label for each of the input time series.
