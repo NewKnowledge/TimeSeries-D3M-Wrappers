@@ -1,6 +1,6 @@
 #!/bin/bash -e 
 
-Datasets = ('56_sunspots','56_sunspots_monthly','LL1_736_population_spawn','LL1_736_population_spawn_simpler','LL1_736_stock_market','LL1_terra_canopy_height_long_form_s4_100','LL1_terra_canopy_height_long_form_s4_90','LL1_terra_canopy_height_long_form_s4_80','LL1_terra_canopy_height_long_form_s4_70','LL1_terra_leaf_angle_mean_long_form_s4')
+Datasets=('56_sunspots','56_sunspots_monthly','LL1_736_population_spawn','LL1_736_population_spawn_simpler','LL1_736_stock_market','LL1_terra_canopy_height_long_form_s4_100','LL1_terra_canopy_height_long_form_s4_90','LL1_terra_canopy_height_long_form_s4_80','LL1_terra_canopy_height_long_form_s4_70','LL1_terra_leaf_angle_mean_long_form_s4')
 cd /primitives
 # git pull upstream master
 # git branch forecasting_pipelines
