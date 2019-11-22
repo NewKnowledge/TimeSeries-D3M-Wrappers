@@ -288,7 +288,7 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
         # use fitting history to set CallResult return values
         if iterations_set:
             has_finished = False
-        elif iters < iteratins:
+        elif iters < iterations:
             has_finished = False
         else:
             has_finished = self._is_fit
