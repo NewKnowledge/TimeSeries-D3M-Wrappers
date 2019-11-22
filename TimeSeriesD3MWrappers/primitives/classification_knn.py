@@ -108,13 +108,11 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
     def _get_cols(self, input_metadata):
         
         # find column with ts value through metadata
-        attribute_cols = input_metadata.list_columns_with_semantic_types(('https://metadata.datadrivendiscovery.org/types/Attribute',))
         grouping_column = input_metadata.list_columns_with_semantic_types(('https://metadata.datadrivendiscovery.org/types/GroupingKey',))
         target_column = input_metadata.list_columns_with_semantic_types(('https://metadata.datadrivendiscovery.org/types/SuggestedTarget',
             'https://metadata.datadrivendiscovery.org/types/TrueTarget', 
             'https://metadata.datadrivendiscovery.org/types/Target'))
-        value_column = list(set(attribute_cols) - set(grouping_column) - set(target_column))
-        return value_column, target_column, grouping_column
+        return target_column, grouping_column
 
     def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
         '''
@@ -131,11 +129,8 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         outputs = np.array(outputs)
         n_ts = outputs.shape[0]
         ts_sz = inputs.shape[0] // n_ts
-
-        # find column with ts value through metadata
-        value_column, _, _ = self._get_cols(inputs.metadata)
         
-        self._X_train = inputs.iloc[:, value_column].values.reshape(n_ts, ts_sz)
+        self._X_train = inputs.value.values.reshape(n_ts, ts_sz)
         self._y_train = np.array(outputs).reshape(-1,)
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
@@ -165,11 +160,11 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             raise PrimitiveNotFittedError("Primitive not fitted.")
 
         # find column with ts value through metadata
-        value_column, target_column, grouping_column = self._get_cols(inputs.metadata)
+        target_column, grouping_column = self._get_cols(inputs.metadata)
 
         n_ts = inputs.iloc[:, grouping_column[0]].nunique()
         ts_sz = inputs.shape[0] // n_ts
-        x_vals = inputs.iloc[:, value_column].values.reshape(n_ts, ts_sz)
+        x_vals = inputs.value.values.reshape(n_ts, ts_sz)
 
         # make predictions
         scaled = self._scaler.transform(x_vals)

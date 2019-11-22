@@ -7,7 +7,7 @@ pipeline_description = Pipeline()
 pipeline_description.add_input(name='inputs')
 
 # Step 1: Ts formatter
-step_0 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_transformation.data_cleaning.DistilTimeSeriesFormatter'))
+step_0 = PrimitiveStep(primitive=index.get_primitive('d3m.primitives.data_preprocessing.data_cleaning.DistilTimeSeriesFormatter'))
 step_0.add_argument(name='inputs', argument_type=ArgumentType.CONTAINER, data_reference='inputs.0')
 step_0.add_output('produce')
 pipeline_description.add_step(step_0)
