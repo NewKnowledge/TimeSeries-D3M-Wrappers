@@ -13,8 +13,6 @@ cd ..
 mkdir pipeline_runs
 cd pipeline_runs
 
-python3 "/src/timeseriesd3mwrappers/TimeSeriesD3MWrappers/pipelines/forecasting_pipeline_var.py"
-
 for i in "${Datasets[@]}"; do
 
   python3 -m d3m runtime -d /datasets/ fit-score -p ../pipelines/*.json -i /datasets/seed_datasets_current/$i/TRAIN/dataset_TRAIN/datasetDoc.json -t /datasets/seed_datasets_current/$i/TEST/dataset_TEST/datasetDoc.json -a /datasets/seed_datasets_current/$i/SCORE/dataset_SCORE/datasetDoc.json -r /datasets/seed_datasets_current/$i/${i}_problem/problemDoc.json -O $i.yml
