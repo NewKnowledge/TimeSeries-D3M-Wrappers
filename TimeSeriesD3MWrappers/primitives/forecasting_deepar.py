@@ -354,7 +354,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             logger.info("""Timing the fitting procedure for one epoch so we
                 can consider timeout thoughtfully""")
             start_time = time.time()
-            self._learner.fit(validation=validation, 
+            _, iterations_completed = self._learner.fit(validation=validation, 
                 steps_per_epoch=self.hyperparams['steps_per_epoch'], 
                 epochs=1, 
                 stopping_patience=self.hyperparams['early_stopping_patience'], 

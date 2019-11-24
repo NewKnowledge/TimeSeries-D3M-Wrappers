@@ -256,7 +256,7 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
             logger.info('Timing the fitting procedure for one epoch so we \
                 can consider timeout thoughtfully')
             start_time = time.time()
-            self._clf.fit(train_dataset,
+            fitting_history = self._clf.fit(train_dataset,
                 epochs = iterations, 
                 validation_data = val_dataset,
                 class_weight = self._class_weights,
