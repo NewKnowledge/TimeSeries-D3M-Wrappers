@@ -123,11 +123,16 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
         # install a Python package first to be even able to run setup.py of another package. Or you have
         # a dependency which is not on PyPi.
         'installation': [
-             {
+            {
+                "type": "PIP",
+                "package": "cython",
+                "version": "0.29.7"
+            },
+            {
                 'type': metadata_base.PrimitiveInstallationType.PIP,
                 'package_uri': 'git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers'.format(
                     git_commit=utils.current_git_commit(os.path.dirname(__file__)),)
-             }
+            }
         ],
         # The same path the primitive is registered with entry points in setup.py.
         'python_path': 'd3m.primitives.time_series_classification.convolutional_neural_net.LSTM_FCN',
