@@ -114,10 +114,7 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         
         # find column with ts value through metadata
         grouping_column = input_metadata.list_columns_with_semantic_types(('https://metadata.datadrivendiscovery.org/types/GroupingKey',))
-        target_column = input_metadata.list_columns_with_semantic_types(('https://metadata.datadrivendiscovery.org/types/SuggestedTarget',
-            'https://metadata.datadrivendiscovery.org/types/TrueTarget', 
-            'https://metadata.datadrivendiscovery.org/types/Target'))
-        return target_column, grouping_column
+        return grouping_column
 
     def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
         '''
@@ -137,6 +134,7 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         
         self._X_train = inputs.value.values.reshape(n_ts, ts_sz)
         self._y_train = np.array(outputs).reshape(-1,)
+        self._output_columns = output.columns
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         """
@@ -165,7 +163,7 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             raise PrimitiveNotFittedError("Primitive not fitted.")
 
         # find column with ts value through metadata
-        target_column, grouping_column = self._get_cols(inputs.metadata)
+        grouping_column = self._get_cols(inputs.metadata)
 
         n_ts = inputs.iloc[:, grouping_column[0]].nunique()
         ts_sz = inputs.shape[0] // n_ts
@@ -176,7 +174,7 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         preds = self._knn.predict(scaled)
 
         # create output frame
-        result_df = container.DataFrame({inputs.columns[target_column[0]]: preds}, generate_metadata=True)
+        result_df = container.DataFrame({inputs.columns[self._output_columns[0]]: preds}, generate_metadata=True)
         result_df.metadata = result_df.metadata.add_semantic_type((metadata_base.ALL_ELEMENTS, 0), 
             ('https://metadata.datadrivendiscovery.org/types/PredictedTarget'))
 
