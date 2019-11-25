@@ -121,7 +121,6 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         self.categories = None
 
         # information about interpolation 
-        self.unique_indices = None
         self.interpolation_ranges = None 
 
         # data needed to fit model and reconstruct predictions
@@ -197,14 +196,11 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # check whether no grouping keys are labeled
         if len(grouping_keys) == 0:
 
-            # sum across duplicated time indices if necessary
+            # avg across duplicated time indices if necessary and re-index
             if sum(inputs_copy[self.time_column].duplicated()) > 0:
-                inputs_copy['temp_time_index_0'] = inputs_copy[self.time_column]
-                inputs_copy= inputs_copy.groupby(['temp_time_index_0']).agg('sum')
-                self.unique_indices = [False]
+                inputs_copy = inputs_copy.groupby(self.time_column).mean()
             else:
-                self.unique_indices = [True]
-            inputs_copy = inputs_copy.set_index(self.time_column)
+                inputs_copy = inputs_copy.set_index(self.time_column)
 
             # interpolate 
             inputs_copy = inputs_copy.interpolate(method='time', limit_direction = 'both')
@@ -219,21 +215,19 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         
             # group by grouping keys -> group non-unique, re-index, interpolate
             self._X_train = [None for i in range(max(grouping_keys_counts))]
-            self.unique_indices = [True for i in range(len(self._X_train))]
             for _, group in inputs_copy.groupby(self.filter_idxs):
                 group_value = group[self.filter_idxs[0]].values[0]
                 interpolation_range = self.interpolation_ranges.loc[group_value]
                 training_idx = np.where(self.interpolation_ranges.index == group_value)[0][0]
                 group = group.drop(columns = self.filter_idxs)    
                 
-                # group non-unique time indices
+                # avg across duplicated time indices if necessary and re-index
                 if sum(group[self.time_column].duplicated()) > 0:
-                    group['temp_time_index_0'] = group[self.time_column]
-                    group = group.groupby(['temp_time_index_0']).agg('sum')
-                    self.unique_indices[training_idx] = False
-            
-                # re-index and interpolate
-                group = group.set_index(self.time_column)
+                    group = group.groupby(self.time_column).mean()
+                else:
+                    group = group.set_index(self.time_column)
+                    
+                # interpolate
                 min_date = self.interpolation_ranges.loc[group_value][self.time_column]['min']
                 max_date = self.interpolation_ranges.loc[group_value][self.time_column]['max']
                 group = group.reindex(pd.date_range(min_date, max_date))
