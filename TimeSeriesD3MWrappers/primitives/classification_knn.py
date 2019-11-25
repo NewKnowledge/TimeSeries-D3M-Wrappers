@@ -174,7 +174,7 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         preds = self._knn.predict(scaled)
 
         # create output frame
-        result_df = container.DataFrame({inputs.columns[self._output_columns[0]]: preds}, generate_metadata=True)
+        result_df = container.DataFrame({self._output_columns[0]: preds}, generate_metadata=True)
         result_df.metadata = result_df.metadata.add_semantic_type((metadata_base.ALL_ELEMENTS, 0), 
             ('https://metadata.datadrivendiscovery.org/types/PredictedTarget'))
 
