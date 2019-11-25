@@ -177,6 +177,7 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
         '''
         
         # load and reshape training data
+        self._output_columns = outputs.columns
         outputs = np.array(outputs)
         n_ts = outputs.shape[0]
         ts_sz = inputs.shape[0] // n_ts
@@ -216,7 +217,6 @@ class LSTM_FCN(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperpara
 
         # mark that new training data has been set
         self._new_train_data = True
-        self._output_columns = outputs.columns
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         '''

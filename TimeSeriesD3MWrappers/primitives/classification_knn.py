@@ -128,13 +128,13 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         '''
 
         # load and reshape training data
+        self._output_columns = outputs.columns
         outputs = np.array(outputs)
         n_ts = outputs.shape[0]
         ts_sz = inputs.shape[0] // n_ts
         
         self._X_train = inputs.value.values.reshape(n_ts, ts_sz)
         self._y_train = np.array(outputs).reshape(-1,)
-        self._output_columns = outputs.columns
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         """
