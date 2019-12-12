@@ -55,10 +55,10 @@ step_2.add_hyperparameter(
 )
 pipeline_description.add_step(step_2)
 
-# Step 3: Grouping Field Compose
+# Step 4: forecasting primitive
 step_3 = PrimitiveStep(
     primitive=index.get_primitive(
-        "d3m.primitives.data_transformation.grouping_field_compose.Common"
+        "d3m.primitives.time_series_forecasting.vector_autoregression.VAR"
     )
 )
 step_3.add_argument(
@@ -66,36 +66,22 @@ step_3.add_argument(
     argument_type=ArgumentType.CONTAINER,
     data_reference="steps.2.produce",
 )
+step_3.add_argument(
+    name="outputs",
+    argument_type=ArgumentType.CONTAINER,
+    data_reference="steps.2.produce",
+)
 step_3.add_output("produce")
 pipeline_description.add_step(step_3)
 
-# Step 4: forecasting primitive
-step_4 = PrimitiveStep(
-    primitive=index.get_primitive(
-        "d3m.primitives.time_series_forecasting.vector_autoregression.VAR"
-    )
-)
-step_4.add_argument(
-    name="inputs",
-    argument_type=ArgumentType.CONTAINER,
-    data_reference="steps.3.produce",
-)
-step_4.add_argument(
-    name="outputs",
-    argument_type=ArgumentType.CONTAINER,
-    data_reference="steps.3.produce",
-)
-step_4.add_output("produce")
-pipeline_description.add_step(step_4)
-
 # Final Output
 pipeline_description.add_output(
-    name="output predictions", data_reference="steps.4.produce"
+    name="output predictions", data_reference="steps.3.produce"
 )
 
 # Output json pipeline
 blob = pipeline_description.to_json()
-filename = blob[8:44] + ".json"
-# filename = "pipeline.json"
+#filename = blob[8:44] + ".json"
+filename = "pipeline.json"
 with open(filename, "w") as outfile:
     outfile.write(blob)
