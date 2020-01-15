@@ -1,3 +1,7 @@
 sloth_predictions.csv
 d3m_env/*
 .vscode/*
+TimeSeriesD3MWrappers.egg-info/*
+TimeSeriesD3MWrappers/__pycache__/*
+TimeSeriesD3MWrappers/models/__pycache__/*
+TimeSeriesD3MWrappers/primitives/__pycache__/*
