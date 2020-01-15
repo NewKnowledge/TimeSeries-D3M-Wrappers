@@ -383,7 +383,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             self._count_data = False
         else:
             raise ValueError("Target column is not of type 'Integer' or 'Float'")
-        logger.info(f"count data: {self._count_data}")
+        #logger.info(f"count data: {self._count_data}")
 
     def _update_indices(self):
         """ private util function: 
@@ -411,7 +411,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         """
 
         # Create TimeSeries dataset objects
-        logger.info(self._ts_frame.head())
+        #logger.info(self._ts_frame.head())
         self._ts_object = TimeSeriesTrain(
             self._ts_frame,
             target_idx=self._target_column,
@@ -424,7 +424,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             integer_timestamps=self._integer_timestamps,
             freq=self.freq,
         )
-        logger.info(self._ts_object.data.head())
+        #logger.info(self._ts_object.data.head())
 
         # Create learner
         self._learner = DeepARLearner(
@@ -674,7 +674,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         logger.info(
             f"Prediction took {time.time() - start_time}s. Predictions array shape: {preds.shape}"
         )
-        logger.info(preds)
+        #logger.info(preds)
 
         # slice predictions with learned intervals
         all_preds = []
@@ -693,7 +693,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             {self._ts_frame.columns[self._target_column]: flat_list},
             generate_metadata=True,
         )
-        logger.info(result_df.head())
+        #logger.info(result_df.head())
         result_df.metadata = result_df.metadata.add_semantic_type(
             (metadata_base.ALL_ELEMENTS, 0),
             ("https://metadata.datadrivendiscovery.org/types/PredictedTarget"),
@@ -802,7 +802,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             np.arange(horizon), len(interval_df.index.unique())
         )
 
-        logger.info(interval_df.head(10))
+        #logger.info(interval_df.head(10))
         # structure return df
         # TODO: add metadata to interval_df??
         return CallResult(
