@@ -21,7 +21,7 @@ setup(
             "time_series_classification.k_neighbors.Kanine = TimeSeriesD3MWrappers.primitives.classification_knn:Kanine",
             "time_series_forecasting.vector_autoregression.VAR = TimeSeriesD3MWrappers.primitives.forecasting_var:VAR",
             "time_series_classification.convolutional_neural_net.LSTM_FCN = TimeSeriesD3MWrappers.primitives.classification_lstm:LSTM_FCN",
-            "time_series_forecasting.recurrent_neural_network.DeepAR = TimeSeriesD3MWrappers.primitives.forecasting_deepar:DeepAR",
+            "time_series_forecasting.lstm.DeepAR = TimeSeriesD3MWrappers.primitives.forecasting_deepar:DeepAR",
         ],
     },
 )

@@ -261,7 +261,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
                 },
             ],
             # The same path the primitive is registered with entry points in setup.py.
-            "python_path": "d3m.primitives.time_series_forecasting.recurrent_neural_network.DeepAR",
+            "python_path": "d3m.primitives.time_series_forecasting.lstm.DeepAR",
             # Choose these from a controlled vocabulary in the schema. If anything is missing which would
             # best describe the primitive, make a merge request.
             "algorithm_types": [
