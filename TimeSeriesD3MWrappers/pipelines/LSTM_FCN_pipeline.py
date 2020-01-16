@@ -91,7 +91,7 @@ step_4.add_hyperparameter(
 step_4.add_output("produce")
 pipeline_description.add_step(step_4)
 
-# Step 6: LSTM_FCN
+# Step 6: LSTM FCN
 step_5 = PrimitiveStep(
     primitive=index.get_primitive(
         "d3m.primitives.time_series_classification.convolutional_neural_net.LSTM_FCN"

@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name="TimeSeriesD3MWrappers",
     version="1.2.0",
-    description="Five wrappers for interacting with New Knowledge time series tool Sloth",
+    description="Two forecasting primitives: Vector Autoregression and Deep Autoregressive forecasting. Two classification primiives: KNN and LSTM FCN with attention",
     packages=["TimeSeriesD3MWrappers"],
     install_requires=[
         "numpy>=1.15.4,<=1.17.3",
@@ -14,7 +14,7 @@ setup(
         "tslearn == 0.2.5",
         "statsmodels==0.10.2",
         "pmdarima==1.0.0",
-        "deepar @ git+https://github.com/NewKnowledge/deepar@27e1458f04f0614a165713ceb89e3622d8a556d0#egg=deepar-0.0.2",
+        "deepar @ git+https://github.com/NewKnowledge/deepar@c801332d26742c17c4265d2155372ce7f1192bc4#egg=deepar-0.0.2",
     ],
     entry_points={
         "d3m.primitives": [

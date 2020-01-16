@@ -30,7 +30,7 @@ Inputs = container.DataFrame
 Outputs = container.DataFrame
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 class Params(params.Params):
@@ -61,7 +61,7 @@ class Hyperparams(hyperparams.Hyperparams):
     epochs = hyperparams.UniformInt(
         lower=1,
         upper=sys.maxsize,
-        default=1,
+        default=10,
         semantic_types=[
             "https://metadata.datadrivendiscovery.org/types/TuningParameter"
         ],
@@ -70,7 +70,7 @@ class Hyperparams(hyperparams.Hyperparams):
     steps_per_epoch = hyperparams.UniformInt(
         lower=5,
         upper=200,
-        default=5,
+        default=10,
         upper_inclusive=True,
         semantic_types=[
             "https://metadata.datadrivendiscovery.org/types/TuningParameter"
@@ -80,7 +80,7 @@ class Hyperparams(hyperparams.Hyperparams):
     early_stopping_patience = hyperparams.UniformInt(
         lower=0,
         upper=sys.maxsize,
-        default=2,
+        default=1,
         semantic_types=[
             "https://metadata.datadrivendiscovery.org/types/TuningParameter"
         ],
@@ -100,7 +100,7 @@ class Hyperparams(hyperparams.Hyperparams):
     learning_rate = hyperparams.Uniform(
         lower=0.0,
         upper=1.0,
-        default=1e-2,
+        default=1e-3,
         semantic_types=[
             "https://metadata.datadrivendiscovery.org/types/TuningParameter"
         ],
@@ -236,7 +236,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             "keywords": [
                 "time series",
                 "forecasting",
-                "convolutional neural network",
+                "recurrent neural network",
                 "autoregressive",
             ],
             "source": {
@@ -253,12 +253,12 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             # a dependency which is not on PyPi.
             "installation": [
                 {"type": "PIP", "package": "cython", "version": "0.29.14"},
-                {
-                    "type": metadata_base.PrimitiveInstallationType.PIP,
-                    "package_uri": "git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers".format(
-                        git_commit=utils.current_git_commit(os.path.dirname(__file__)),
-                    ),
-                },
+                # {
+                #     "type": metadata_base.PrimitiveInstallationType.PIP,
+                #     "package_uri": "git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers".format(
+                #         git_commit=utils.current_git_commit(os.path.dirname(__file__)),
+                #     ),
+                # },
             ],
             # The same path the primitive is registered with entry points in setup.py.
             "python_path": "d3m.primitives.time_series_forecasting.lstm.DeepAR",
@@ -503,6 +503,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
 
         # mark that new training data has been set
         self._new_train_data = True
+        self._in_sample_preds = None
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         """ Fits DeepAR model using training data from set_training_data and hyperparameters
@@ -660,9 +661,11 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         # Create TimeSeriesTest object
         if self._train_data.equals(inputs):
             ts_test_object = TimeSeriesTest(self._ts_object)
+            include_all_training = True
         # test
         else:
             ts_test_object = TimeSeriesTest(self._ts_object, test_frame)
+            include_all_training = self.hyperparams['seed_predictions_with_all_data']
 
         # get prediction slices
         pred_intervals = self._get_pred_intervals(test_frame)
@@ -670,11 +673,16 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         # make predictions with learner
         start_time = time.time()
         logger.info(f"Making predictions...")
-        preds = self._learner.predict(ts_test_object, include_all_training=self.hyperparams['seed_predictions_with_all_data'])
+        preds = self._learner.predict(ts_test_object, include_all_training=include_all_training)
         logger.info(
             f"Prediction took {time.time() - start_time}s. Predictions array shape: {preds.shape}"
         )
-        #logger.info(preds)
+
+        # append saved in-sample predictions to test predictions if not seeding with all context
+        if self._in_sample_preds is None:
+            self._in_sample_preds = preds
+        elif not self.hyperparams['seed_predictions_with_all_data']:
+            preds = np.concatenate((self._in_sample_preds, preds), axis=1)
 
         # slice predictions with learned intervals
         all_preds = []
