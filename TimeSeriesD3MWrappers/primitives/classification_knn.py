@@ -149,6 +149,24 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         )
         return grouping_column
 
+    def _get_value_col(self, input_metadata):
+        """
+        private util function that finds the value column from input metadata
+
+        Arguments:
+        input_metadata {D3M Metadata object} -- D3M Metadata object for input frame
+
+        Returns:
+        int -- index of column that contains time series value after Time Series Formatter primitive
+        """
+
+        # find attribute column but not file column
+        attributes = input_metadata.list_columns_with_semantic_types(('https://metadata.datadrivendiscovery.org/types/Attribute',))
+        # this is assuming alot, but timeseries formaters typicaly place value column at the end
+        attribute_col = attributes[-1]
+        return attribute_col
+
+
     def set_training_data(self, *, inputs: Inputs, outputs: Outputs) -> None:
         """ Sets primitive's training data
 
@@ -163,7 +181,8 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         n_ts = outputs.shape[0]
         ts_sz = inputs.shape[0] // n_ts
 
-        self._X_train = inputs.value.values.reshape(n_ts, ts_sz)
+        attribute_col = self._get_value_col(inputs.metadata)
+        self._X_train = inputs.iloc[:, attribute_col].values.reshape(n_ts, ts_sz)
         self._y_train = np.array(outputs).reshape(-1,)
 
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
@@ -210,7 +229,8 @@ class Kanine(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
 
         n_ts = inputs.iloc[:, grouping_column[0]].nunique()
         ts_sz = inputs.shape[0] // n_ts
-        x_vals = inputs.value.values.reshape(n_ts, ts_sz)
+        attribute_col = self._get_value_col(inputs.metadata)
+        x_vals = inputs.iloc[:, attribute_col].values.reshape(n_ts, ts_sz)
 
         # make predictions
         scaled = self._scaler.transform(x_vals)
