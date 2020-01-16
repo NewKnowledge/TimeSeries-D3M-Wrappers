@@ -253,12 +253,12 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             # a dependency which is not on PyPi.
             "installation": [
                 {"type": "PIP", "package": "cython", "version": "0.29.14"},
-                # {
-                #     "type": metadata_base.PrimitiveInstallationType.PIP,
-                #     "package_uri": "git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers".format(
-                #         git_commit=utils.current_git_commit(os.path.dirname(__file__)),
-                #     ),
-                # },
+                {
+                    "type": metadata_base.PrimitiveInstallationType.PIP,
+                    "package_uri": "git+https://github.com/NewKnowledge/TimeSeries-D3M-Wrappers.git@{git_commit}#egg=TimeSeriesD3MWrappers".format(
+                        git_commit=utils.current_git_commit(os.path.dirname(__file__)),
+                    ),
+                },
             ],
             # The same path the primitive is registered with entry points in setup.py.
             "python_path": "d3m.primitives.time_series_forecasting.lstm.DeepAR",
