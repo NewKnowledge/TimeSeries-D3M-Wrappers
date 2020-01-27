@@ -71,17 +71,18 @@ step_3.add_argument(
     argument_type=ArgumentType.CONTAINER,
     data_reference="steps.2.produce",
 )
-step_3.add_output("produce_confidence_intervals")
+step_3.add_hyperparameter(name = 'interpret_value', argument_type=ArgumentType.VALUE, data = 'series')
+step_3.add_output("produce_weights")
 pipeline_description.add_step(step_3)
 
 # Final Output
 pipeline_description.add_output(
-    name="confidence intervals", data_reference="steps.3.produce_confidence_intervals"
+    name="aggregated regression coefficients", data_reference="steps.3.produce_weights"
 )
 
 # Output json pipeline
 blob = pipeline_description.to_json()
 #filename = blob[8:44] + ".json"
-filename = "pipeline_ci_var.json"
+filename = "pipeline_ci_var_weights_value.json"
 with open(filename, "w") as outfile:
     outfile.write(blob)
