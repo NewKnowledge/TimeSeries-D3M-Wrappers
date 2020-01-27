@@ -8,7 +8,7 @@ D3M primitives
 
 2. **classification_lstm.py**: wrapper for LSTM Fully Convolutional Networks for Time Series Classification paper, original repo (https://github.com/titu1994/MLSTM-FCN), paper (https://arxiv.org/abs/1801.04503)
 
-3. **forecasting_deepar.py**: wrapper for DeepAR recurrent, autoregressive Time Series Forecasting algorithm (https://arxiv.org/abs/1704.04110). Custom implementation repo (git+https://github.com/NewKnowledge/deepar#egg=deepar-0.0.1)
+3. **forecasting_deepar.py**: wrapper for DeepAR recurrent, autoregressive Time Series Forecasting algorithm (https://arxiv.org/abs/1704.04110). Custom implementation repo (https://github.com/NewKnowledge/deepar)
 
 4. **forecasting_var.py**: wrapper for **statsmodels**' implementation of vector autoregression for multivariate time series
 
