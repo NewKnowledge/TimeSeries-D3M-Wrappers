@@ -18,11 +18,9 @@ step_0.add_argument(
 step_0.add_output("produce")
 pipeline_description.add_step(step_0)
 
-# Step 1: column parser on input DF
+# Step 1: Simple Profiler Column Role Annotation
 step_1 = PrimitiveStep(
-    primitive=index.get_primitive(
-        "d3m.primitives.data_transformation.column_parser.Common"
-    )
+    primitive=index.get_primitive("d3m.primitives.schema_discovery.profiler.Common")
 )
 step_1.add_argument(
     name="inputs",
@@ -30,7 +28,21 @@ step_1.add_argument(
     data_reference="steps.0.produce",
 )
 step_1.add_output("produce")
-step_1.add_hyperparameter(
+pipeline_description.add_step(step_1)
+
+# Step 2: column parser on input DF
+step_2 = PrimitiveStep(
+    primitive=index.get_primitive(
+        "d3m.primitives.data_transformation.column_parser.Common"
+    )
+)
+step_2.add_argument(
+    name="inputs",
+    argument_type=ArgumentType.CONTAINER,
+    data_reference="steps.1.produce",
+)
+step_2.add_output("produce")
+step_2.add_hyperparameter(
     name="parse_semantic_types",
     argument_type=ArgumentType.VALUE,
     data=[
@@ -41,50 +53,30 @@ step_1.add_hyperparameter(
         "http://schema.org/DateTime",
     ],
 )
-pipeline_description.add_step(step_1)
+pipeline_description.add_step(step_2)
 
-# Step 2: parse attribute semantic types
-step_2 = PrimitiveStep(
+# Step 3: parse attribute semantic types
+step_3 = PrimitiveStep(
     primitive=index.get_primitive(
         "d3m.primitives.data_transformation.extract_columns_by_semantic_types.Common"
     )
-)
-step_2.add_argument(
-    name="inputs",
-    argument_type=ArgumentType.CONTAINER,
-    data_reference="steps.1.produce",
-)
-step_2.add_hyperparameter(
-    name="semantic_types",
-    argument_type=ArgumentType.VALUE,
-    data=["https://metadata.datadrivendiscovery.org/types/Attribute"],
-)
-step_2.add_output("produce")
-pipeline_description.add_step(step_2)
-
-# Step 3: imputer
-step_3 = PrimitiveStep(
-    primitive=index.get_primitive("d3m.primitives.data_cleaning.imputer.SKlearn")
 )
 step_3.add_argument(
     name="inputs",
     argument_type=ArgumentType.CONTAINER,
     data_reference="steps.2.produce",
 )
+step_3.add_hyperparameter(
+    name="semantic_types",
+    argument_type=ArgumentType.VALUE,
+    data=["https://metadata.datadrivendiscovery.org/types/Attribute"],
+)
 step_3.add_output("produce")
-step_3.add_hyperparameter(
-    name="return_result", argument_type=ArgumentType.VALUE, data="replace"
-)
-step_3.add_hyperparameter(
-    name="use_semantic_types", argument_type=ArgumentType.VALUE, data=True
-)
 pipeline_description.add_step(step_3)
 
-# Step 4: Grouping Field Compose
+# Step 4: imputer
 step_4 = PrimitiveStep(
-    primitive=index.get_primitive(
-        "d3m.primitives.data_transformation.grouping_field_compose.Common"
-    )
+    primitive=index.get_primitive("d3m.primitives.data_cleaning.imputer.SKlearn")
 )
 step_4.add_argument(
     name="inputs",
@@ -92,20 +84,40 @@ step_4.add_argument(
     data_reference="steps.3.produce",
 )
 step_4.add_output("produce")
+step_4.add_hyperparameter(
+    name="return_result", argument_type=ArgumentType.VALUE, data="replace"
+)
+step_4.add_hyperparameter(
+    name="use_semantic_types", argument_type=ArgumentType.VALUE, data=True
+)
 pipeline_description.add_step(step_4)
 
-# Step 5: parse target semantic types
+# Step 5: Grouping Field Compose
 step_5 = PrimitiveStep(
     primitive=index.get_primitive(
-        "d3m.primitives.data_transformation.extract_columns_by_semantic_types.Common"
+        "d3m.primitives.data_transformation.grouping_field_compose.Common"
     )
 )
 step_5.add_argument(
     name="inputs",
     argument_type=ArgumentType.CONTAINER,
-    data_reference="steps.1.produce",
+    data_reference="steps.4.produce",
 )
-step_5.add_hyperparameter(
+step_5.add_output("produce")
+pipeline_description.add_step(step_5)
+
+# Step 6: parse target semantic types
+step_6 = PrimitiveStep(
+    primitive=index.get_primitive(
+        "d3m.primitives.data_transformation.extract_columns_by_semantic_types.Common"
+    )
+)
+step_6.add_argument(
+    name="inputs",
+    argument_type=ArgumentType.CONTAINER,
+    data_reference="steps.2.produce",
+)
+step_6.add_hyperparameter(
     name="semantic_types",
     argument_type=ArgumentType.VALUE,
     data=[
@@ -114,36 +126,51 @@ step_5.add_hyperparameter(
         "https://metadata.datadrivendiscovery.org/types/SuggestedTarget",
     ],
 )
-step_5.add_output("produce")
-pipeline_description.add_step(step_5)
+step_6.add_output("produce")
+pipeline_description.add_step(step_6)
 
-# Step 6: forecasting primitive
-step_6 = PrimitiveStep(
+# Step 7: forecasting primitive
+step_7 = PrimitiveStep(
     primitive=index.get_primitive(
-        "d3m.primitives.time_series_forecasting.recurrent_neural_network.DeepAR"
+        "d3m.primitives.time_series_forecasting.lstm.DeepAR"
     )
 )
-step_6.add_argument(
+step_7.add_argument(
     name="inputs",
-    argument_type=ArgumentType.CONTAINER,
-    data_reference="steps.4.produce",
-)
-step_6.add_argument(
-    name="outputs",
     argument_type=ArgumentType.CONTAINER,
     data_reference="steps.5.produce",
 )
-step_6.add_output("produce_confidence_intervals")
-pipeline_description.add_step(step_6)
+step_7.add_argument(
+    name="outputs",
+    argument_type=ArgumentType.CONTAINER,
+    data_reference="steps.6.produce",
+)
+step_7.add_hyperparameter(
+    name="epochs",
+    argument_type=ArgumentType.VALUE,
+    data=1
+)
+step_7.add_hyperparameter(
+    name="steps_per_epoch",
+    argument_type=ArgumentType.VALUE,
+    data=5
+)
+step_7.add_hyperparameter(
+    name="seed_predictions_with_all_data",
+    argument_type=ArgumentType.VALUE,
+    data=False
+)
+step_7.add_output("produce_confidence_intervals")
+pipeline_description.add_step(step_7)
 
 # Final Output
 pipeline_description.add_output(
-    name="confidence intervals", data_reference="steps.6.produce_confidence_intervals"
+    name="confidence intervals", data_reference="steps.7.produce_confidence_intervals"
 )
 
 # Output json pipeline
 blob = pipeline_description.to_json()
 # filename = blob[8:44] + ".json"
-filename = "pipeline.json"
+filename = "pipeline_ci.json"
 with open(filename, "w") as outfile:
     outfile.write(blob)

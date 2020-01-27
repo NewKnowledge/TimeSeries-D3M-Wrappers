@@ -18,11 +18,9 @@ step_0.add_argument(
 step_0.add_output("produce")
 pipeline_description.add_step(step_0)
 
-# Step 1: column parser on input DF
+# Step 1: Simple Profiler Column Role Annotation
 step_1 = PrimitiveStep(
-    primitive=index.get_primitive(
-        "d3m.primitives.data_transformation.column_parser.Common"
-    )
+    primitive=index.get_primitive("d3m.primitives.schema_discovery.profiler.Common")
 )
 step_1.add_argument(
     name="inputs",
@@ -30,7 +28,21 @@ step_1.add_argument(
     data_reference="steps.0.produce",
 )
 step_1.add_output("produce")
-step_1.add_hyperparameter(
+pipeline_description.add_step(step_1)
+
+# Step 2: column parser on input DF
+step_2 = PrimitiveStep(
+    primitive=index.get_primitive(
+        "d3m.primitives.data_transformation.column_parser.Common"
+    )
+)
+step_2.add_argument(
+    name="inputs",
+    argument_type=ArgumentType.CONTAINER,
+    data_reference="steps.1.produce",
+)
+step_2.add_output("produce")
+step_2.add_hyperparameter(
     name="parse_semantic_types",
     argument_type=ArgumentType.VALUE,
     data=[
@@ -41,23 +53,9 @@ step_1.add_hyperparameter(
         "http://schema.org/DateTime",
     ],
 )
-pipeline_description.add_step(step_1)
-
-# Step 2: Grouping Field Compose
-step_2 = PrimitiveStep(
-    primitive=index.get_primitive(
-        "d3m.primitives.data_transformation.grouping_field_compose.Common"
-    )
-)
-step_2.add_argument(
-    name="inputs",
-    argument_type=ArgumentType.CONTAINER,
-    data_reference="steps.1.produce",
-)
-step_2.add_output("produce")
 pipeline_description.add_step(step_2)
 
-# Step 3: forecasting primitive produce_weights method
+# Step 4: forecasting primitive
 step_3 = PrimitiveStep(
     primitive=index.get_primitive(
         "d3m.primitives.time_series_forecasting.vector_autoregression.VAR"
@@ -83,7 +81,7 @@ pipeline_description.add_output(
 
 # Output json pipeline
 blob = pipeline_description.to_json()
-filename = blob[8:44] + ".json"
-# filename = "pipeline.json"
+#filename = blob[8:44] + ".json"
+filename = "pipeline_ci_var_weights.json"
 with open(filename, "w") as outfile:
     outfile.write(blob)

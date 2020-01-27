@@ -1,6 +1,6 @@
 #!/bin/bash -e 
 
-Datasets=('LL1_Adiac' 'LL1_ArrowHead' 'LL1_CinC_ECG_torso' 'LL1_Cricket_Y' 'LL1_ECG200' 'LL1_ElectricDevices' 'LL1_FISH' 'LL1_FaceFour' 'LL1_FordA' 'LL1_HandOutlines' 'LL1_Haptics' 'LL1_ItalyPowerDemand' 'LL1_Meat' 'LL1_OSULeaf' '66_chlorineConcentration')
+Datasets=('66_chlorineConcentration_MIN_METADATA' 'LL1_Adiac_MIN_METADATA' 'LL1_ArrowHead_MIN_METADATA' 'LL1_CinC_ECG_torso_MIN_METADATA' 'LL1_Cricket_Y_MIN_METADATA' 'LL1_ECG200_MIN_METADATA' 'LL1_ElectricDevices_MIN_METADATA' 'LL1_FISH_MIN_METADATA' 'LL1_FaceFour_MIN_METADATA' 'LL1_FordA_MIN_METADATA' 'LL1_HandOutlines_MIN_METADATA' 'LL1_Haptics_MIN_METADATA' 'LL1_ItalyPowerDemand_MIN_METADATA' 'LL1_Meat_MIN_METADATA' 'LL1_OSULeaf_MIN_METADATA')
 cd /primitives
 # git pull upstream master
 # git checkout classification_pipelines
