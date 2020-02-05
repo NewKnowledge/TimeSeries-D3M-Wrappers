@@ -23,7 +23,7 @@ from TimeSeriesD3MWrappers.models.var_model_utils import Arima, calculate_time_f
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 __author__ = "Distil"
 __version__ = "1.2.0"
@@ -221,14 +221,17 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """ Sets primitive's training data
         
             Arguments:
-                inputs {Inputs} -- full D3M dataframe, containing attributes, key, and target
-                outputs {Outputs} -- full D3M dataframe, containing attributes, key, and target
+                inputs {Inputs} -- D3M dataframe containing attributes
+                outputs {Outputs} -- D3M dataframe containing targets
             
             Raises:
                 ValueError: If multiple columns are annotated with 'Time' or 'DateTime' metadata
         """
         # make copy of input data!
         inputs_copy = inputs.copy()
+        
+        # combine inputs and outputs 
+        inputs_copy = inputs_copy.append_columns(outputs)
 
         # mark datetime column
         times = inputs_copy.metadata.list_columns_with_semantic_types(
@@ -268,11 +271,10 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # mark target variables
         self._targets = inputs_copy.metadata.list_columns_with_semantic_types(
             (
-                "https://metadata.datadrivendiscovery.org/types/SuggestedTarget",
-                "https://metadata.datadrivendiscovery.org/types/TrueTarget",
                 "https://metadata.datadrivendiscovery.org/types/Target",
             )
         )
+        # logger.info(self._targets)
         self._target_types = [
             "i"
             if "http://schema.org/Integer"
@@ -657,7 +659,6 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                         var_df.loc[var_df.shape[0]] = [i, *preds.iloc[r].values]
         var_df = d3m_DataFrame(var_df)
         var_df.iloc[:, 0] = var_df.iloc[:, 0].astype(int)
-        logger.debug(var_df.head())
 
         # first column ('d3mIndex')
         col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))

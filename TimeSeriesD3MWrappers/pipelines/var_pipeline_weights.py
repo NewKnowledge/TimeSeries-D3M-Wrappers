@@ -55,10 +55,10 @@ step_2.add_hyperparameter(
 )
 pipeline_description.add_step(step_2)
 
-# Step 4: forecasting primitive
+# Step 3: parse attribute semantic types
 step_3 = PrimitiveStep(
     primitive=index.get_primitive(
-        "d3m.primitives.time_series_forecasting.vector_autoregression.VAR"
+        "d3m.primitives.data_transformation.extract_columns_by_semantic_types.Common"
     )
 )
 step_3.add_argument(
@@ -66,17 +66,59 @@ step_3.add_argument(
     argument_type=ArgumentType.CONTAINER,
     data_reference="steps.2.produce",
 )
-step_3.add_argument(
+step_3.add_hyperparameter(
+    name="semantic_types",
+    argument_type=ArgumentType.VALUE,
+    data=["https://metadata.datadrivendiscovery.org/types/Attribute"],
+)
+step_3.add_output("produce")
+pipeline_description.add_step(step_3)
+
+# Step 5: parse target semantic types
+step_4 = PrimitiveStep(
+    primitive=index.get_primitive(
+        "d3m.primitives.data_transformation.extract_columns_by_semantic_types.Common"
+    )
+)
+step_4.add_argument(
+    name="inputs",
+    argument_type=ArgumentType.CONTAINER,
+    data_reference="steps.2.produce",
+)
+step_4.add_hyperparameter(
+    name="semantic_types",
+    argument_type=ArgumentType.VALUE,
+    data=[
+        "https://metadata.datadrivendiscovery.org/types/Target",
+        "https://metadata.datadrivendiscovery.org/types/TrueTarget",
+        "https://metadata.datadrivendiscovery.org/types/SuggestedTarget",
+    ],
+)
+step_4.add_output("produce")
+pipeline_description.add_step(step_4)
+
+# Step 5: forecasting primitive
+step_5 = PrimitiveStep(
+    primitive=index.get_primitive(
+        "d3m.primitives.time_series_forecasting.vector_autoregression.VAR"
+    )
+)
+step_5.add_argument(
+    name="inputs",
+    argument_type=ArgumentType.CONTAINER,
+    data_reference="steps.2.produce",
+)
+step_5.add_argument(
     name="outputs",
     argument_type=ArgumentType.CONTAINER,
     data_reference="steps.2.produce",
 )
-step_3.add_output("produce_weights")
-pipeline_description.add_step(step_3)
+step_5.add_output("produce_weights")
+pipeline_description.add_step(step_5)
 
 # Final Output
 pipeline_description.add_output(
-    name="aggregated regression coefficients", data_reference="steps.3.produce_weights"
+    name="aggregated regression coefficients", data_reference="steps.5.produce_weights"
 )
 
 # Output json pipeline

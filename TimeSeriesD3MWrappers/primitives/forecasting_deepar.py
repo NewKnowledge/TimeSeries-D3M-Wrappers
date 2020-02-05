@@ -30,7 +30,7 @@ Inputs = container.DataFrame
 Outputs = container.DataFrame
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 class Params(params.Params):
