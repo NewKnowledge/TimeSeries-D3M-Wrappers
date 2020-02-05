@@ -14,7 +14,7 @@ setup(
         "tslearn == 0.2.5",
         "statsmodels==0.10.2",
         "pmdarima==1.0.0",
-        "deepar @ git+https://github.com/NewKnowledge/deepar@c801332d26742c17c4265d2155372ce7f1192bc4#egg=deepar-0.0.2",
+        "deepar @ git+https://github.com/NewKnowledge/deepar@d06db4f6324ab8006c9b4703408ce3b6ae955cf4#egg=deepar-0.0.2",
     ],
     entry_points={
         "d3m.primitives": [

@@ -221,14 +221,17 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         """ Sets primitive's training data
         
             Arguments:
-                inputs {Inputs} -- full D3M dataframe, containing attributes, key, and target
-                outputs {Outputs} -- full D3M dataframe, containing attributes, key, and target
+                inputs {Inputs} -- D3M dataframe containing attributes
+                outputs {Outputs} -- D3M dataframe containing targets
             
             Raises:
                 ValueError: If multiple columns are annotated with 'Time' or 'DateTime' metadata
         """
         # make copy of input data!
         inputs_copy = inputs.copy()
+        
+        # combine inputs and outputs 
+        inputs_copy = inputs_copy.append_columns(outputs)
 
         # mark datetime column
         times = inputs_copy.metadata.list_columns_with_semantic_types(
@@ -268,11 +271,10 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # mark target variables
         self._targets = inputs_copy.metadata.list_columns_with_semantic_types(
             (
-                "https://metadata.datadrivendiscovery.org/types/SuggestedTarget",
-                "https://metadata.datadrivendiscovery.org/types/TrueTarget",
                 "https://metadata.datadrivendiscovery.org/types/Target",
             )
         )
+        # logger.info(self._targets)
         self._target_types = [
             "i"
             if "http://schema.org/Integer"
@@ -657,7 +659,6 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                         var_df.loc[var_df.shape[0]] = [i, *preds.iloc[r].values]
         var_df = d3m_DataFrame(var_df)
         var_df.iloc[:, 0] = var_df.iloc[:, 0].astype(int)
-        logger.debug(var_df.head())
 
         # first column ('d3mIndex')
         col_dict = dict(var_df.metadata.query((metadata_base.ALL_ELEMENTS, 0)))
@@ -727,6 +728,13 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         if not self._is_fit:
             raise PrimitiveNotFittedError("Primitive not fitted.")
 
+        if self.hyperparams['interpret_value'] == 'series':
+            logger.info("You should interpret a row of the returned matrix like this: " + 
+                "Each row represents an endogeneous variable for which the VAR process learned an equation. " +
+                "Each column represents all of the endogenous variables used in the regression equation. " + 
+                "Each matrix entry represents the weight of the column endogeneous variable in the equation for the " + 
+                "row endogenous variable.")
+
         # get correlation coefficients
         coefficients = [
             np.absolute(fit.coefs)
@@ -742,7 +750,6 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # combine coeffcient vectors into single df
         coef_df = None
         for coef, trend, names in zip(coefficients, trends, self._X_train_names):
-
             # aggregate VAR coefficients based on HPs
             if trend is not None:
                 if self.hyperparams["interpret_value"] == "series":
@@ -770,7 +777,11 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 if self.hyperparams["interpret_value"] == "lag_order":
                     coef_df = pd.concat([coef_df, coef], sort = True)
 
-        # TODO: add metadata to coef_df??
+        if coef_df is not None:
+            logger.info(f"There was no more than one variable in each grouping of time series, " +
+                "therefore only ARIMA models were fit. Additionally, becasue the 'interpret_value' " +
+                "hyperparameter is set to series, this will return an empty dataframe.")
+
         return CallResult(
             container.DataFrame(coef_df, generate_metadata=True),
             has_finished=self._is_fit,
@@ -804,6 +815,10 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
                 b      |    1     |  6   |   4  |   8
         """
 
+        logger.info("This method exclusively produces confidence interval forecasts for future timesteps. It does " +
+            "not produce confidence intervals for in-sample predictions. The length of the horizon " + 
+            "can be controlled with the hyperparameter 'confidence_interval_horizon.'")
+
         if not self._is_fit:
             raise PrimitiveNotFittedError("Primitive not fitted.")
 
@@ -812,36 +827,39 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # produce confidence interval forecasts using VAR / ARIMA
         confidence_intervals = []
-        for fit, vals, lags in zip(self._fits, self._values_diff, self._lag_order):
+        for fit, vals, vals_diff, lags in zip(self._fits, self._values, self._values_diff, self._lag_order):
             if lags is not None and lags > 0:
-                confidence_intervals.append(
-                    fit.forecast_interval(y = vals[-fit.k_ar:], 
-                        steps = horizon, 
-                        alpha = alpha)
-                )
+                forecast = fit.forecast_interval(y = vals_diff[-fit.k_ar:], 
+                    steps = horizon, 
+                    alpha = alpha)
+                
+                # undo differencing transforms
+                forecast = [f.cumsum(axis = 0) for f in forecast]
+                forecast += np.sum(np.concatenate((vals[:1], vals_diff[:lags], fit.fittedvalues), axis = 0), axis = 0)
+                confidence_intervals.append(forecast)
             elif lags == 0:
                 q = stats.norm.ppf(1 - alpha / 2)
                 mean = np.repeat(fit.params, horizon, axis = 0)
                 lower = np.repeat(fit.params - q * fit.stderr, horizon, axis = 0)
                 upper = np.repeat(fit.params + q * fit.stderr, horizon, axis = 0)
+
+                # undo differencing transforms
+                offset = np.sum(np.concatenate((vals[:1], vals_diff[:lags], fit.fittedvalues), axis = 0), axis = 0)
+                mean = mean.cumsum(axis = 0) + offset
+                lower = lower.cumsum(axis = 0) + offset
+                upper = upper.cumsum(axis = 0) + offset
                 confidence_intervals.append(
                     (mean, lower, upper)
                 )
             else:
-                confidence_intervals.append(
-                    fit.predict(n_periods = horizon, 
-                        return_conf_int = True, 
-                        alpha = alpha)
-                )
+                forecast = fit.predict(n_periods = horizon, 
+                    return_conf_int = True, 
+                    alpha = alpha)
 
-        # undo differencing transformations
-        confidence_intervals = [
-            [
-                point_estimate.cumsum(axis=0) + vals[-1:, ]
-                for point_estimate in interval
-            ]
-            for interval, vals in zip(confidence_intervals, self._values)
-        ]
+                # undo differencing transforms
+                forecast = [f.cumsum(axis = 0) for f in forecast]
+                forecast += np.sum(np.concatenate((vals[:1], vals_diff[:1], fit.predict_in_sample().reshape(-1,1)), axis = 0), axis = 0)
+                confidence_intervals.append(forecast)
 
         # combine into long form df
         series_names = [
@@ -869,19 +887,17 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
 
         # apply invariances (real, positive data AND rounding NA / INF values)
         confidence_intervals = [
-            ci.clip(lower = 0).replace(np.inf, np.nan)
-            if not positive 
-            else ci.replace(np.inf, np.nan)
-            for ci, positive in zip(confidence_intervals, self._positive)
+            ci.clip(lower = 0)#.replace(np.inf, np.nan)
+            #if not positive 
+            #else ci.replace(np.inf, np.nan)
+            for ci, positive in zip(confidence_intervals, self._positive) if not positive 
         ]
-        confidence_intervals = [ci.fillna(ci.mean()) for ci in confidence_intervals]
+        #confidence_intervals = [ci.fillna(ci.mean()) for ci in confidence_intervals]
 
         interval_df = pd.concat(confidence_intervals)
 
         # add index column
         interval_df['horizon_index'] = np.tile(np.arange(horizon), len(interval_df.index.unique()))
-
-        # TODO: add metadata to interval_df??
         return CallResult(
             container.DataFrame(interval_df, generate_metadata=True),
             has_finished=self._is_fit,

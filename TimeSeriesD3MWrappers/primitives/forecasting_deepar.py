@@ -653,6 +653,7 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
 
         if not self._is_fit:
             raise PrimitiveNotFittedError("Primitive not fitted.")
+
         if len(self._drop_cols_no_tgt) > 0 and inputs.shape[1] != self._cols_after_drop:
             test_frame = inputs.remove_columns(self._drop_cols_no_tgt)
         else:
@@ -693,6 +694,12 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             )  # this takes predictions at actual indices
         flat_list = np.array([p for pred_list in all_preds for p in pred_list])
 
+        # if np.isinf(all_preds).any():
+        #     logger.debug(f'There are {np.isinf(all_preds).sum()} inf preds')
+        # if np.isnan(all_preds).any():
+        #     logger.debug(f'There are {np.isnan(all_preds).sum()} nan preds')
+        # logger.debug(f'Max: {preds.max()}, Min: {preds.min()}')
+
         # fill nans with 0s in case model predicted some (shouldnt need to - preventing edge case)
         flat_list = np.nan_to_num(flat_list)
 
@@ -701,7 +708,6 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             {self._ts_frame.columns[self._target_column]: flat_list},
             generate_metadata=True,
         )
-        #logger.info(result_df.head())
         result_df.metadata = result_df.metadata.add_semantic_type(
             (metadata_base.ALL_ELEMENTS, 0),
             ("https://metadata.datadrivendiscovery.org/types/PredictedTarget"),
@@ -709,7 +715,6 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
 
         return CallResult(result_df, has_finished=self._is_fit)
 
-    # TODO: update when produce() has been tested
     def produce_confidence_intervals(
         self, *, inputs: Inputs, timeout: float = None, iterations: int = None
     ) -> CallResult[Outputs]:
@@ -741,38 +746,23 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         if not self._is_fit:
             raise PrimitiveNotFittedError("Primitive not fitted.")
 
-        horizon = self.hyperparams["confidence_interval_horizon"]
         alpha = self.hyperparams["confidence_interval_alpha"]
 
-        if len(self._drop_cols_no_tgt) > 0:
+        if len(self._drop_cols_no_tgt) > 0 and inputs.shape[1] != self._cols_after_drop:
             test_frame = inputs.remove_columns(self._drop_cols_no_tgt)
         else:
             test_frame = inputs.copy()
 
-        # training
+        # Create TimeSeriesTest object
         if self._train_data.equals(inputs):
-            include_all_training = False
-
+            ts_test_object = TimeSeriesTest(self._ts_object)
+            include_all_training = True
+            horizon = 0
         # test
         else:
-            include_all_training = True
-
-            # function to get prediction slices
-            pred_intervals = self._get_pred_intervals(test_frame, keep_all=True)
-
-            # function to update frame (throw error if covariates)
-            test_frame = self._create_new_test_frame(
-                test_frame, pred_intervals, self._max_train, self._train_diff
-            )
-
-        # Create TimeSeriesTest object with saved metadata and train object
-        ts_test_object = TimeSeriesTest(
-            test_frame,
-            self._ts_object,
-            timestamp_idx=self._timestamp_column,
-            grouping_idx=self._grouping_column,
-            index_col=self._index_column,
-        )
+            ts_test_object = TimeSeriesTest(self._ts_object, test_frame)
+            include_all_training = self.hyperparams['seed_predictions_with_all_data']
+            horizon = self.hyperparams["confidence_interval_horizon"]
 
         # make predictions with learner
         start_time = time.time()
@@ -782,9 +772,10 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
             horizon=horizon,
             samples=self.hyperparams["confidence_interval_samples"],
             include_all_training=include_all_training,
+            point_estimate = False
         )
         logger.info(
-            f"Predicting {preds.shape[1]} timesteps into the future took {time.time() - start_time} s"
+            f"Prediction took {time.time() - start_time}s. Predictions array shape: {preds.shape}"
         )
 
         # convert samples to percentiles
@@ -792,29 +783,31 @@ class DeepAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams
         lowers = np.percentile(preds, alpha / 2 * 100, axis=2).reshape(-1, 1)
         uppers = np.percentile(preds, (1 - alpha / 2) * 100, axis=2).reshape(-1, 1)
 
+        assert (lowers < means).all()
+        assert (means < uppers).all()
+
         # convert to df
         if self._grouping_column is None:
-            indices = np.repeat(self._output_columns[0], horizon)
+            indices = np.repeat(self._output_columns[0], preds.shape[1])
         else:
             indices = np.repeat(
-                test_frame[test_frame.columns[self._grouping_column]].unique(), horizon
+                test_frame[test_frame.columns[self._grouping_column]].unique(), preds.shape[1]
             )
         interval_df = pd.DataFrame(
             np.concatenate((means, lowers, uppers), axis=1),
             columns=["mean", str(alpha / 2), str(1 - alpha / 2)],
             index=indices,
-        )
+        )        
 
         # add index column
         interval_df["horizon_index"] = np.tile(
-            np.arange(horizon), len(interval_df.index.unique())
+            np.arange(preds.shape[1]), len(interval_df.index.unique())
         )
+        
+        logger.debug(interval_df.head())
 
-        #logger.info(interval_df.head(10))
         # structure return df
-        # TODO: add metadata to interval_df??
         return CallResult(
             container.DataFrame(interval_df, generate_metadata=True),
             has_finished=self._is_fit,
         )
-
