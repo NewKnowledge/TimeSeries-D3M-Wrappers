@@ -271,6 +271,7 @@ class VAR(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
         # mark target variables
         self._targets = inputs_copy.metadata.list_columns_with_semantic_types(
             (
+                "https://metadata.datadrivendiscovery.org/types/TrueTarget",
                 "https://metadata.datadrivendiscovery.org/types/Target",
             )
         )
